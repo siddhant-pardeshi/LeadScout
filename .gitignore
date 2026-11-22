@@ -13,6 +13,16 @@ desktop.ini
 # QA renders (regenerable via headless Chrome)
 tools/qa/*.png
 
+# Walkthrough build artifacts (sources + docs outputs are committed;
+# renders, voices, segments and the venv are regenerable)
+tools/video/.venv/
+tools/video/segs/
+tools/video/scenes/*.png
+tools/video/scenes/*.mp3
+tools/video/concat.txt
+tools/video/durations.txt
+tools/video/test_voice.mp3
+
 # Logs & temp
 *.log
 *.tmp

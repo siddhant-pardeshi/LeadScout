@@ -46,6 +46,20 @@ then pray the AI didn't mix Company A's CEO into Company B's sheet.
 <img src="assets/columns.svg" alt="The Excel output: name, designation, country, company, size, industry, LinkedIn URL, email, status" width="100%">
 </div>
 
+## 🎬 Video walkthrough — every feature, explained
+
+<div align="center">
+
+<a href="docs/walkthrough.mp4"><img src="docs/walkthrough-poster.png" alt="LeadScout video walkthrough poster" width="80%"></a>
+
+**▶ [Watch the walkthrough — 4 minutes, with voice-over](docs/walkthrough.mp4)**
+
+A friendly guided tour of *every* feature: install → bulk input → the research engine →
+current-roles engine → verification → emails → one-click Excel export → background controls →
+free API keys. **Captions:** [`docs/walkthrough.srt`](docs/walkthrough.srt)
+
+</div>
+
 ---
 
 ## ✨ Every feature, explained simply
@@ -196,6 +210,12 @@ before first contact.
 </div>
 
 <div align="center">
+<img src="assets/footer-cta.svg" alt="Get started in 2 minutes — typing install terminal, checklist, feature ticker" width="100%">
+</div>
+
+<div align="center">
+
+### 🎥 Prefer watching? [▶ Play the 4-minute walkthrough](docs/walkthrough.mp4)
 
 **Built by [siddhant-pardeshi](https://github.com/siddhant-pardeshi)**
 

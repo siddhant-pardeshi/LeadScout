@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" role="img" aria-label="Get started footer — install steps and feature ticker">
+  <defs>
+    <linearGradient id="fbg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B0D17"/>
+      <stop offset="1" stop-color="#141731"/>
+    </linearGradient>
+    <linearGradient id="bord" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="300" y2="0">
+      <stop offset="0"   stop-color="#4F46E5" stop-opacity="0.1"/>
+      <stop offset="0.5" stop-color="#C084FC"/>
+      <stop offset="1"   stop-color="#4F46E5" stop-opacity="0.1"/>
+      <animateTransform attributeName="gradientTransform" type="translate"
+        values="0 0; 900 0; 0 0" dur="6s" repeatCount="indefinite"/>
+    </linearGradient>
+    <filter id="fblur" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="38"/>
+    </filter>
+    <clipPath id="fframe"><rect width="1200" height="360" rx="24"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#fframe)">
+    <rect width="1200" height="360" fill="url(#fbg)"/>
+
+    <!-- ambient glows + particles -->
+    <circle cx="180" cy="90" r="110" fill="#6366F1" opacity="0.16" filter="url(#fblur)">
+      <animate attributeName="cy" values="90;110;90" dur="9s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="1040" cy="280" r="110" fill="#9333EA" opacity="0.15" filter="url(#fblur)">
+      <animate attributeName="cy" values="280;260;280" dur="10s" repeatCount="indefinite"/>
+    </circle>
+    <g fill="#A5B4FC">
+      <circle cx="480" cy="60" r="2.2" opacity="0.45"><animate attributeName="opacity" values="0.45;0.1;0.45" dur="6s" repeatCount="indefinite"/></circle>
+      <circle cx="700" cy="320" r="2" opacity="0.4"><animate attributeName="opacity" values="0.4;0.08;0.4" dur="7s" repeatCount="indefinite"/></circle>
+      <circle cx="940" cy="70" r="2.2" opacity="0.4"><animate attributeName="opacity" values="0.4;0.1;0.4" dur="8s" repeatCount="indefinite"/></circle>
+    </g>
+
+    <!-- animated gradient border -->
+    <rect x="1.5" y="1.5" width="1197" height="357" rx="23" fill="none" stroke="url(#bord)" stroke-width="2.5"/>
+
+    <!-- ── LEFT: typing terminal ── -->
+    <rect x="50" y="56" width="600" height="222" rx="14" fill="#0E1120" stroke="#2A3050"/>
+    <circle cx="76" cy="80" r="7" fill="#F87171"/>
+    <circle cx="98" cy="80" r="7" fill="#FBBF24"/>
+    <circle cx="120" cy="80" r="7" fill="#34D399"/>
+    <text x="142" y="85" font-family="Consolas,'Cascadia Mono',monospace" font-size="13" fill="#5A617F">chrome://extensions — LeadScout setup</text>
+    <g font-family="Consolas,'Cascadia Mono',monospace" font-size="16.5">
+      <text x="76" y="126" fill="#7FB2F0">$ open chrome://extensions
+        <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.07;1" dur="9s" repeatCount="indefinite"/>
+      </text>
+      <text x="76" y="156" fill="#D5DAEE">Developer mode: <tspan fill="#34D399" font-weight="bold">ON</tspan>
+        <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.24;1" dur="9s" repeatCount="indefinite"/>
+      </text>
+      <text x="76" y="186" fill="#D5DAEE">Load unpacked → LeadScout/
+        <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.42;1" dur="9s" repeatCount="indefinite"/>
+      </text>
+      <text x="76" y="216" fill="#34D399">✔ extension loaded — pinned
+        <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.60;1" dur="9s" repeatCount="indefinite"/>
+      </text>
+      <text x="76" y="246" fill="#C084FC" font-weight="bold">▶ Start research — 100 companies queued…
+        <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.78;1" dur="9s" repeatCount="indefinite"/>
+      </text>
+    </g>
+    <rect x="446" y="232" width="10" height="18" fill="#C084FC">
+      <animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite"/>
+    </rect>
+
+    <!-- ── RIGHT: checklist + star ── -->
+    <text x="710" y="96" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="27" font-weight="800" fill="#E7E9F2">Get started in 2 minutes</text>
+    <g font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="17.5" fill="#C3C9E8">
+      <g>
+        <rect x="710" y="116" width="24" height="24" rx="7" fill="#0F2A20" stroke="#2E6E5B"/>
+        <path d="M716 128 l5 5 l9 -10" stroke="#34D399" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.30;1" dur="9s" repeatCount="indefinite"/>
+        </path>
+        <text x="748" y="133">Clone or download this repo</text>
+      </g>
+      <g>
+        <rect x="710" y="152" width="24" height="24" rx="7" fill="#0F2A20" stroke="#2E6E5B"/>
+        <path d="M716 164 l5 5 l9 -10" stroke="#34D399" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.50;1" dur="9s" repeatCount="indefinite"/>
+        </path>
+        <text x="748" y="169">Load unpacked in Chrome</text>
+      </g>
+      <g>
+        <rect x="710" y="188" width="24" height="24" rx="7" fill="#0F2A20" stroke="#2E6E5B"/>
+        <path d="M716 200 l5 5 l9 -10" stroke="#34D399" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.70;1" dur="9s" repeatCount="indefinite"/>
+        </path>
+        <text x="748" y="205">Paste companies → export TSV</text>
+      </g>
+    </g>
+    <rect x="710" y="228" width="220" height="40" rx="20" fill="#1A1E33" stroke="#8B5CF6">
+      <animate attributeName="stroke" values="#8B5CF6;#34D399;#8B5CF6" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.85;1;0.85" dur="3s" repeatCount="indefinite"/>
+    </rect>
+    <text x="820" y="254" text-anchor="middle" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="16" font-weight="700" fill="#E9D5FF">⭐ Star the repo</text>
+
+    <!-- ── BOTTOM: infinite feature marquee ── -->
+    <rect x="0" y="300" width="1200" height="36" fill="#10131F"/>
+    <g clip-path="url(#fframe)">
+      <g font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="16" font-weight="700">
+        <animateTransform attributeName="transform" type="translate" values="0 0; -1400 0" dur="14s" repeatCount="indefinite"/>
+        <text x="20" y="324" fill="#8B93B8">50–100 companies per run <tspan fill="#C084FC">✦</tspan> current roles only <tspan fill="#34D399">✦</tspan> verified LinkedIn URLs <tspan fill="#C084FC">✦</tspan> Hunter-verified emails <tspan fill="#34D399">✦</tspan> filter-aware TSV export <tspan fill="#C084FC">✦</tspan> pause · resume · refresh <tspan fill="#34D399">✦</tspan> free AI keys <tspan fill="#C084FC">✦</tspan> </text>
+        <text x="1420" y="324" fill="#8B93B8">50–100 companies per run <tspan fill="#C084FC">✦</tspan> current roles only <tspan fill="#34D399">✦</tspan> verified LinkedIn URLs <tspan fill="#C084FC">✦</tspan> Hunter-verified emails <tspan fill="#C084FC">✦</tspan> filter-aware TSV export <tspan fill="#C084FC">✦</tspan> pause · resume · refresh <tspan fill="#34D399">✦</tspan> free AI keys <tspan fill="#C084FC">✦</tspan> </text>
+      </g>
+    </g>
+  </g>
+</svg>

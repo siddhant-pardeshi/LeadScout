@@ -1,0 +1,77 @@
+1
+00:00:00,000 --> 00:00:21,160
+Meet LeadScout! A Chrome extension that turns fifty to one hundred company
+names into a complete decision-maker lead sheet, ready for Microsoft Excel. It
+finds the CEO, the CTO, AI heads, product and engineering leaders, with their
+
+2
+00:00:21,510 --> 00:00:39,526
+Researching companies one by one is slow, and pasting multiple companies into
+a chatbot mixes up the details. LeadScout fixes that by researching every
+company in complete isolation — its own searches, its own page reads, its own
+
+3
+00:00:39,876 --> 00:00:56,668
+Installing takes two minutes. Open Chrome extensions and enable Developer
+mode. Click Load unpacked and select the LeadScout folder. Pin it to your
+toolbar. That's it — no servers, no signup; everything runs locally in your
+
+4
+00:00:57,018 --> 00:01:13,186
+Paste your companies in the big box — LinkedIn URLs, plain names like
+Freshworks, or a mix on the same line. Duplicates are removed automatically.
+You can also click Add current LinkedIn page while browsing, to capture the
+
+5
+00:01:13,536 --> 00:01:32,248
+For every company, LeadScout resolves its LinkedIn page — first by guessing
+the page slug and verifying it live, then by scored Bing search as backup. A
+deep scan reads the About page for industry, company size, headquarters, and
+
+6
+00:01:32,598 --> 00:01:48,166
+Then it runs scoped Bing searches for decision-makers. Every profile link
+comes from a real search result — never guessed. A strict matching gate checks
+the company against each title and snippet, so a person appears only under the
+
+7
+00:01:48,516 --> 00:02:06,484
+You want the latest designation, not an old one. The role currency engine
+keeps a person only with a current role at this company. Former, ex, or
+was-style mentions are dropped — and it is position-aware: an engineer
+
+8
+00:02:06,834 --> 00:02:25,546
+Everything is labeled. Verified means the profile URL came from a real search
+result for that company. Unverified is flagged, never invented. Priorities P1
+to P5 rank C-suite and founders above directors and managers, following the
+
+9
+00:02:25,896 --> 00:02:44,848
+Emails work in two layers. With a free Hunter dot io key, LeadScout matches
+each person against real, domain-verified addresses. Without it, it estimates
+patterns like first dot last at the company's verified domain — and always
+
+10
+00:02:45,198 --> 00:03:08,590
+One click copies the full fourteen-column TSV: name, designation, country,
+company, size, industry, LinkedIn URL, email, status, role currency, priority,
+verification, HQ, and the company page. Filters apply to exports too — filter
+
+11
+00:03:08,940 --> 00:03:28,612
+The queue runs in the background with live progress, ETAs, pause, resume,
+stop, retry, and refresh all. If Bing asks for human verification, LeadScout
+pauses itself, notifies you, and resumes when you are ready. Refresh all
+
+12
+00:03:28,962 --> 00:03:46,162
+AI is optional. Groq structures results fast, Gemini adds real Google search
+grounding, and OpenRouter offers free Llama models — all with free keys. And
+if a provider rotates a model id, you can update it right in settings, no
+
+13
+00:03:46,512 --> 00:04:01,600
+That is LeadScout. Paste your list, click start, and export verified
+decision-makers to Excel — current roles, real links, honest labels. Star the
+repo, try it on your own Chrome, and ship your next lead list today.
