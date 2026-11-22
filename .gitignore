@@ -1,0 +1,18 @@
+# Local audit artifacts
+.mimosa/
+
+# OS noise
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+
+# QA renders (regenerable via headless Chrome)
+tools/qa/*.png
+
+# Logs & temp
+*.log
+*.tmp

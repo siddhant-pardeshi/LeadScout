@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <title>LeadScout — Results</title>
+  <link rel="stylesheet" href="popup.css">
+  <style>
+    body { width: auto; max-height: none; min-height: 100vh; }
+    .results-main { max-width: 1400px; margin: 0 auto; padding: 18px 24px 40px; }
+    .table-wrap { max-height: none; }
+    .res-table { font-size: 13px; }
+    .res-table td a { white-space: nowrap; }
+    .est-mail { opacity: 0.85; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 128 128" aria-hidden="true">
+        <defs>
+          <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#4F46E5"/>
+            <stop offset="1" stop-color="#9333EA"/>
+          </linearGradient>
+        </defs>
+        <rect width="128" height="128" rx="28" fill="url(#lg)"/>
+        <circle cx="56" cy="54" r="25" fill="none" stroke="#fff" stroke-width="13"/>
+        <line x1="75" y1="72" x2="99" y2="96" stroke="#fff" stroke-width="13" stroke-linecap="round"/>
+        <circle cx="49" cy="48" r="6" fill="#fff"/>
+        <circle cx="63" cy="43" r="6" fill="#fff"/>
+        <circle cx="58" cy="61" r="6" fill="#fff"/>
+      </svg>
+      <div class="brand-text">
+        <h1>LeadScout — Results</h1>
+        <span class="tagline" id="resSummary">0 people</span>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button id="btnCopyTsv" class="btn primary small">📋 Copy full TSV</button>
+      <button id="btnCopyCore" class="btn ghost small">Copy core 7 columns</button>
+      <button id="btnDlTsv" class="btn ghost small">⬇ .TSV</button>
+      <button id="btnDlCsv" class="btn ghost small">⬇ .CSV</button>
+    </div>
+  </header>
+
+  <main class="results-main">
+    <div class="card">
+      <div class="filter-row" id="filterRow">
+        <button class="chip active" data-f="all">All</button>
+        <button class="chip" data-f="C-Suite">C-Suite</button>
+        <button class="chip" data-f="AI &amp; Automation">AI &amp; Automation</button>
+        <button class="chip" data-f="Product">Product</button>
+        <button class="chip" data-f="Engineering">Engineering</button>
+        <button class="chip" data-f="Digital &amp; IT">Digital &amp; IT</button>
+        <button class="chip" data-f="Innovation / R&amp;D">Innovation / R&amp;D</button>
+        <button class="chip" data-f="Security">Security</button>
+        <button class="chip" data-f="unverified">⚠ Unverified</button>
+        <button class="chip" data-f="review">Needs review</button>
+      </div>
+      <input id="resSearch" class="text-input" type="search"
+        placeholder="Search name, designation, company, industry…" style="max-width: 420px; margin-bottom: 10px;">
+      <div class="table-wrap">
+        <table class="res-table">
+          <thead>
+            <tr>
+              <th>Name</th><th>Designation</th><th>Country</th><th>Company</th>
+              <th>Size</th><th>Industry</th><th>LinkedIn</th><th>Email (est.)</th><th>Flags</th>
+            </tr>
+          </thead>
+          <tbody id="resBody"></tbody>
+        </table>
+      </div>
+      <p class="hint" id="truncateNote"></p>
+    </div>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script type="module" src="results.js"></script>
+</body>
+</html>

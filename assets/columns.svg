@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 430" width="1200" height="430" role="img" aria-label="LeadScout Excel output preview">
+  <defs>
+    <linearGradient id="sbg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B0D17"/>
+      <stop offset="1" stop-color="#131629"/>
+    </linearGradient>
+    <clipPath id="sframe"><rect width="1200" height="430" rx="24"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#sframe)">
+    <rect width="1200" height="430" fill="url(#sbg)"/>
+
+    <text x="600" y="44" text-anchor="middle" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
+          font-size="22" font-weight="700" fill="#E7E9F2">One click → paste into Microsoft Excel</text>
+
+    <!-- spreadsheet card -->
+    <rect x="30" y="66" width="1140" height="316" rx="14" fill="#12152A" stroke="#2A3050"/>
+
+    <!-- travelling highlight row (behind text) -->
+    <rect x="31" y="102" width="1138" height="40" fill="#8B5CF6" opacity="0.13">
+      <animate attributeName="y" values="102;142;182;222;262;302;342;102" dur="5.6s"
+        keyTimes="0;0.14;0.28;0.42;0.57;0.71;0.85;1" repeatCount="indefinite"/>
+    </rect>
+
+    <!-- header row -->
+    <rect x="31" y="102" width="1138" height="40" fill="#1A1E33"/>
+    <g font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="13.5" font-weight="700" fill="#A5B4FC">
+      <text x="44"  y="127">Name</text>
+      <text x="150" y="127">Designation</text>
+      <text x="322" y="127">Country</text>
+      <text x="404" y="127">Company</text>
+      <text x="500" y="127">Size</text>
+      <text x="600" y="127">Industry</text>
+      <text x="716" y="127">LinkedIn URL</text>
+      <text x="876" y="127">Email</text>
+      <text x="1040" y="127">Status</text>
+    </g>
+    <line x1="31" y1="142" x2="1169" y2="142" stroke="#2A3050" stroke-width="1.5"/>
+
+    <!-- rows -->
+    <g font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="13.5" fill="#D5DAEE">
+      <g>
+        <text x="44"  y="166">Jane Doe</text>
+        <text x="150" y="166">Chief Technology Officer</text>
+        <text x="322" y="166">India</text>
+        <text x="404" y="166">Acme Corp</text>
+        <text x="500" y="166">201-500</text>
+        <text x="600" y="166">Software Dev…</text>
+        <text x="716" y="166" fill="#7FB2F0">linkedin.com/in/jane…</text>
+        <text x="876" y="166" fill="#7EE2B8">jane.doe@acme.io</text>
+        <rect x="1040" y="151" width="76" height="22" rx="11" fill="#0F2A20" stroke="#2E6E5B"/>
+        <text x="1078" y="166" text-anchor="middle" font-size="11.5" font-weight="700" fill="#34D399">P1 · V</text>
+      </g>
+      <line x1="31" y1="182" x2="1169" y2="182" stroke="#1E2338"/>
+      <g>
+        <text x="44"  y="206">Ravi Kumar</text>
+        <text x="150" y="206">Head of AI</text>
+        <text x="322" y="206">India</text>
+        <text x="404" y="206">Acme Corp</text>
+        <text x="500" y="206">201-500</text>
+        <text x="600" y="206">Software Dev…</text>
+        <text x="716" y="206" fill="#7FB2F0">linkedin.com/in/ravi…</text>
+        <text x="876" y="206" fill="#8A92AD">r.kumar@acme.io †</text>
+        <rect x="1040" y="191" width="76" height="22" rx="11" fill="#0F2A20" stroke="#2E6E5B"/>
+        <text x="1078" y="206" text-anchor="middle" font-size="11.5" font-weight="700" fill="#34D399">P2 · V</text>
+      </g>
+      <line x1="31" y1="222" x2="1169" y2="222" stroke="#1E2338"/>
+      <g>
+        <text x="44"  y="246">Sarah Chen</text>
+        <text x="150" y="246">VP of Product</text>
+        <text x="322" y="246">Singapore</text>
+        <text x="404" y="246">Acme Pte Ltd</text>
+        <text x="500" y="246">51-200</text>
+        <text x="600" y="246">Software Dev…</text>
+        <text x="716" y="246" fill="#7FB2F0">linkedin.com/in/sar…</text>
+        <text x="876" y="246" fill="#FBD38D">s.chen@acme.com.sg †</text>
+        <rect x="1040" y="231" width="76" height="22" rx="11" fill="#241C10" stroke="#8A6D2B"/>
+        <text x="1078" y="246" text-anchor="middle" font-size="11.5" font-weight="700" fill="#FBBF24">P2 · S</text>
+      </g>
+      <line x1="31" y1="262" x2="1169" y2="262" stroke="#1E2338"/>
+      <g>
+        <text x="44"  y="286">David Cole</text>
+        <text x="150" y="286">Head of Digital Transf…</text>
+        <text x="322" y="286">USA</text>
+        <text x="404" y="286">Acme Inc</text>
+        <text x="500" y="286">5,001-10,000</text>
+        <text x="600" y="286">Software Dev…</text>
+        <text x="716" y="286" fill="#7FB2F0">linkedin.com/in/dav…</text>
+        <text x="876" y="286" fill="#8A92AD">—</text>
+        <rect x="1040" y="271" width="76" height="22" rx="11" fill="#241C10" stroke="#8A6D2B"/>
+        <text x="1078" y="286" text-anchor="middle" font-size="11.5" font-weight="700" fill="#FBBF24">P2 · S</text>
+      </g>
+      <line x1="31" y1="302" x2="1169" y2="302" stroke="#1E2338"/>
+      <g>
+        <text x="44"  y="326">Priya Sharma</text>
+        <text x="150" y="326">Director of Engineering</text>
+        <text x="322" y="326">India</text>
+        <text x="404" y="326">Acme Corp</text>
+        <text x="500" y="326">201-500</text>
+        <text x="600" y="326">Software Dev…</text>
+        <text x="716" y="326" fill="#7FB2F0">linkedin.com/in/pri…</text>
+        <text x="876" y="326" fill="#7EE2B8">priya.sharma@acme.io</text>
+        <rect x="1040" y="311" width="76" height="22" rx="11" fill="#0F2A20" stroke="#2E6E5B"/>
+        <text x="1078" y="326" text-anchor="middle" font-size="11.5" font-weight="700" fill="#34D399">P3 · V</text>
+      </g>
+      <line x1="31" y1="342" x2="1169" y2="342" stroke="#1E2338"/>
+      <g opacity="0.55">
+        <text x="44"  y="366">Mark Olsen</text>
+        <text x="150" y="366">Former CEO at Acme — dropped</text>
+        <text x="322" y="366">—</text>
+        <text x="404" y="366">—</text>
+        <text x="500" y="366">—</text>
+        <text x="600" y="366">—</text>
+        <text x="716" y="366" fill="#6F7794">filtered out</text>
+        <text x="876" y="366">—</text>
+        <rect x="1040" y="351" width="76" height="22" rx="11" fill="#2A1518" stroke="#7A3B44"/>
+        <text x="1078" y="366" text-anchor="middle" font-size="11.5" font-weight="700" fill="#F87171">PAST</text>
+      </g>
+    </g>
+
+    <!-- copy pulse -->
+    <rect x="470" y="394" width="260" height="26" rx="13" fill="#4F46E5" opacity="0.9">
+      <animate attributeName="opacity" values="0.9;0.55;0.9" dur="2.4s" repeatCount="indefinite"/>
+    </rect>
+    <text x="600" y="412" text-anchor="middle" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
+          font-size="13" font-weight="700" fill="#FFFFFF">📋  COPY  TSV  →  Ctrl+V in Excel</text>
+
+    <text x="30" y="418" text-anchor="start" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
+          font-size="12" fill="#5A617F">† estimated — verify before outreach · past roles are dropped automatically · 14-column export includes HQ &amp; verification</text>
+  </g>
+</svg>
