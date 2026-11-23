@@ -19,7 +19,7 @@ import {
   roleCurrency, matchHunterEmail, cell
 } from './lib/parse.js';
 import { classifyDesignation, seniorityBonus } from './lib/rank.js';
-import { aiResearch } from './lib/ai.js';
+import { aiResearch, aiTestKey } from './lib/ai.js';
 import { hunterDomainSearch } from './lib/hunter.js';
 import { extractBingResults, extractLinkedInCompany } from './lib/extract.js';
 
@@ -359,33 +359,6 @@ async function guessCompanyByName(name) {
   if (!out || !out.found || !out.name) return null;
   if (overlapTokens(out.name, name) === 0) return null; // a different company lives at that slug
   return { slug: slug, data: out };
-}
-
-/**
- * Tier-2 resolver gate: recall-friendly matching for Bing company-page results.
- * Returns a confidence tier (2 strong / 1 weak / 0 reject). The strict
- * all-token gate from v1.1 rejected correct pages whose LinkedIn title is
- * shorter than the typed legal name ("Zoho" for "Zoho Corporation").
- */
-function looseResolveMatch(title, snippet, slug, name) {
-  const hay = String(title || '') + ' ' + String(snippet || '');
-  const low = hay.toLowerCase();
-  const nTokens = String(name || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/).filter(t => t.length >= 2);
-  if (!nTokens.length) return 0;
-  // strong: the full typed name appears in the result text
-  if (low.indexOf(String(name).toLowerCase()) !== -1) return 2;
-  // strong: every significant token present in title/snippet
-  if (nTokens.every(t => low.indexOf(t) !== -1)) return 2;
-  // medium: the slug alone covers every significant query token
-  const sTokens = String(slug || '').toLowerCase().split(/[-_]+/).filter(t => t.length >= 2);
-  const slugJoined = ' ' + sTokens.join(' ') + ' ';
-  if (nTokens.every(t => slugJoined.indexOf(' ' + t + ' ') !== -1)) return 2;
-  // weak: some token overlap on both the slug and the text (scoring picks the best)
-  const slugHit = nTokens.some(t => slugJoined.indexOf(' ' + t + ' ') !== -1);
-  const textHit = nTokens.some(t => low.indexOf(t) !== -1);
-  if (slugHit && textHit) return 1;
-  return 0;
 }
 
 // ------------------------------------------------------- main per-company ----
@@ -755,9 +728,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           }
         }
       } else if (msg.type === 'testAI') {
-        const { aiTestKey } = await import('./lib/ai.js');
-        await loadAll();
-        const out = await aiTestKey(msg.provider, SETTINGS);
+        const out = await aiTestKey(msg.provider, msg.settings || SETTINGS);
         sendResponse({ ok: true, message: out });
       }
     } catch (e) {
