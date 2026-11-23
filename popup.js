@@ -559,14 +559,15 @@ function openSettings() {
   $('setHost').value = settings.searchHost || 'www.bing.com';
   $('setTheme').value = settings.theme || 'dark';
   $('customFields').classList.toggle('hidden', $('setProvider').value !== 'custom');
+  $('testResult').textContent = '';
+  $('testResult').className = 'test-result';
   $('settingsModal').classList.remove('hidden');
 }
 
-async function saveSettings() {
-  const provider = $('setProvider').value;
-  const next = {
+function readSettingsForm() {
+  return {
     ...settings,
-    provider: provider,
+    provider: $('setProvider').value,
     keys: {
       groq: $('setKeyGroq').value.trim(),
       gemini: $('setKeyGemini').value.trim(),
@@ -586,8 +587,11 @@ async function saveSettings() {
     searchHost: $('setHost').value,
     theme: $('setTheme').value
   };
+}
 
-  if (provider === 'custom' && next.customBase) {
+async function saveSettings() {
+  const next = readSettingsForm();
+  if (next.provider === 'custom' && next.customBase) {
     try {
       const origin = new URL(next.customBase).origin + '/*';
       const granted = await chrome.permissions.request({ origins: [origin] });
@@ -607,6 +611,7 @@ async function saveSettings() {
     return;
   }
   settings = next;
+  $('optProvider').value = next.provider;
   applyTheme();
   $('settingsModal').classList.add('hidden');
   toast('Settings saved');
@@ -616,7 +621,8 @@ async function testKey() {
   const el = $('testResult');
   el.textContent = 'Testing…';
   el.className = 'test-result';
-  const res = await sendMsg({ type: 'testAI', provider: $('setProvider').value });
+  const draft = readSettingsForm();
+  const res = await sendMsg({ type: 'testAI', provider: draft.provider, settings: draft });
   if (res.ok) {
     el.textContent = '✓ ' + res.message;
     el.classList.add('ok');

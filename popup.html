@@ -9,13 +9,7 @@
   <header class="topbar">
     <div class="brand">
       <svg class="logo" viewBox="0 0 128 128" aria-hidden="true">
-        <defs>
-          <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#4F46E5"/>
-            <stop offset="1" stop-color="#9333EA"/>
-          </linearGradient>
-        </defs>
-        <rect width="128" height="128" rx="28" fill="url(#lg)"/>
+        <rect width="128" height="128" rx="22" fill="#08665b"/>
         <circle cx="56" cy="54" r="25" fill="none" stroke="#fff" stroke-width="13"/>
         <line x1="75" y1="72" x2="99" y2="96" stroke="#fff" stroke-width="13" stroke-linecap="round"/>
         <circle cx="49" cy="48" r="6" fill="#fff"/>
@@ -37,7 +31,7 @@
     <!-- ============ INPUT CARD ============ -->
     <section class="card" id="cardInput">
       <div class="card-head">
-        <h2>1 · Companies to research</h2>
+        <h2>Companies to research</h2>
         <span id="inputCount" class="count-badge">0</span>
       </div>
       <textarea id="companyInput" rows="7"
@@ -49,7 +43,7 @@
       </div>
 
       <div class="card-head mt">
-        <h2>2 · Options</h2>
+        <h2>Options</h2>
       </div>
       <div class="options-grid">
         <label class="opt">
@@ -138,9 +132,9 @@
       </div>
       <div class="export-row">
         <button id="btnCopyCore" class="btn ghost small">Copy core 7 columns</button>
-        <button id="btnDlTsv" class="btn ghost small">⬇ .TSV</button>
-        <button id="btnDlCsv" class="btn ghost small">⬇ .CSV</button>
-        <button id="btnOpenFull" class="btn ghost small">⤢ Full view</button>
+        <button id="btnDlTsv" class="btn ghost small">Download TSV</button>
+        <button id="btnDlCsv" class="btn ghost small">Download CSV</button>
+        <button id="btnOpenFull" class="btn ghost small">Full view</button>
         <button id="btnClearResults" class="btn ghost small danger">Clear</button>
       </div>
       <p class="hint">Exports follow the active filter and search box. Role Currency column flags past-role suspects.</p>
@@ -173,10 +167,10 @@
           <label class="opt"><span>Custom base URL (e.g. https://api.example.com/v1)</span><input type="text" id="setCustomBase" class="text-input" placeholder="https://api.example.com/v1"></label>
           <label class="opt"><span>Custom model id</span><input type="text" id="setCustomModel" class="text-input" placeholder="gpt-4o-mini"></label>
         </div>
-        <button id="btnTestKey" class="btn ghost small">🔑 Test key</button>
+        <button id="btnTestKey" class="btn ghost small">Test key</button>
         <span id="testResult" class="test-result"></span>
 
-        <div class="card-head mt"><h2>AI models (auto-updated defaults — override if a provider rotates ids)</h2></div>
+        <div class="card-head mt"><h2>AI model overrides</h2></div>
         <label class="opt"><span>Groq model</span><input type="text" id="setModelGroq" class="text-input" placeholder="llama-3.3-70b-versatile"></label>
         <label class="opt"><span>Gemini model</span><input type="text" id="setModelGemini" class="text-input" placeholder="gemini-2.0-flash"></label>
         <label class="opt"><span>OpenRouter model</span><input type="text" id="setModelOpenrouter" class="text-input" placeholder="meta-llama/llama-3.3-70b-instruct:free"></label>

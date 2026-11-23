@@ -1,5 +1,7 @@
 // LeadScout logic tests — run with: node tools/test.mjs
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import {
   parseInputs, slugFromUrl, titleCaseSlug, decodeBingUrl, parseProfileTitle,
   linkedinHandle, companyMatch, companyMatchPartial, domainFromWebsite, emailFor,
@@ -14,6 +16,19 @@ function T(name, fn) {
   try { fn(); passed++; console.log('  ok  ' + name); }
   catch (e) { failed++; console.log('FAIL  ' + name + '  → ' + e.message); }
 }
+
+T('Manifest background worker parses as an ES module', () => {
+  const root = new URL('../', import.meta.url);
+  const manifest = JSON.parse(readFileSync(new URL('manifest.json', root), 'utf8'));
+  const worker = manifest.background.service_worker;
+  const source = readFileSync(new URL(worker, root), 'utf8');
+  const check = spawnSync(process.execPath, ['--input-type=module', '--check'], {
+    input: source,
+    encoding: 'utf8'
+  });
+  if (check.error) throw check.error;
+  assert.equal(check.status, 0, worker + '\n' + check.stderr.trim());
+});
 
 // ---------------- input parsing ----------------
 T('parseInputs: url / name / mixed lines dedupe', () => {
