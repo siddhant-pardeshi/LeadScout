@@ -374,6 +374,50 @@ T('officialPageCandidate: legal-name domain trust and homepage leadership cards'
   }, 'https://www.twilio.com/', 'Twilio'), null);
 });
 
+T('officialPageCandidate: keeps a profile link found on the company page, never claims it verified', () => {
+  const sun = officialPageCandidate({
+    name: 'DILIP SHANGHVI', role: 'Executive Chairman', section: 'Board of Directors',
+    pageTitle: 'Board of Directors | Sun Pharmaceutical Industries Limited',
+    url: 'https://sunpharma.com/board-of-directors', evidence: 'DILIP SHANGHVI Executive Chairman',
+    profileUrl: 'https://www.linkedin.com/in/dilip-shanghvi/?trk=footer'
+  }, 'https://sunpharma.com/', 'SUN PHARMA');
+  assert.ok(sun);
+  assert.equal(sun.profileUrl, 'https://www.linkedin.com/in/dilip-shanghvi/');
+  assert.equal(sun.sourceType, 'official', 'role evidence stays official');
+
+  const companyPage = officialPageCandidate({
+    name: 'DILIP SHANGHVI', role: 'Executive Chairman', section: 'Board of Directors',
+    pageTitle: 'Board of Directors | Sun Pharmaceutical Industries Limited',
+    url: 'https://sunpharma.com/board-of-directors', evidence: 'DILIP SHANGHVI Executive Chairman',
+    profileUrl: 'https://www.linkedin.com/company/sun-pharma/'
+  }, 'https://sunpharma.com/', 'SUN PHARMA');
+  assert.equal(companyPage.profileUrl, '', 'a company page is never a person profile');
+
+  const none = officialPageCandidate({
+    name: 'DILIP SHANGHVI', role: 'Executive Chairman', section: 'Board of Directors',
+    pageTitle: 'Board of Directors | Sun Pharmaceutical Industries Limited',
+    url: 'https://sunpharma.com/board-of-directors', evidence: 'DILIP SHANGHVI Executive Chairman'
+  }, 'https://sunpharma.com/', 'SUN PHARMA');
+  assert.equal(none.profileUrl, '');
+});
+
+T('a company-page profile link reaches the CSV LINKEDIN_URL cell', () => {
+  const v = officialPageCandidate({
+    name: 'Asha Shah', role: 'Chief Technology Officer', section: 'Leadership',
+    pageTitle: 'Leadership | Acme Corp', url: 'https://example.com/leadership',
+    evidence: 'Asha Shah Chief Technology Officer',
+    profileUrl: 'https://www.linkedin.com/in/asha-shah/'
+  }, 'https://example.com/', 'Acme Corp');
+  assert.ok(v && v.profileUrl);
+  const csv = buildCSV([{
+    name: 'Acme Corp', website: 'https://example.com',
+    people: [{ ...v, url: v.profileUrl, urlVerified: false, currentEmployer: 'official' }]
+  }]);
+  const cells = csv.trim().split('\r\n')[1].split(',');
+  assert.equal(cells[cells.length - 1], 'https://www.linkedin.com/in/asha-shah/');
+  assert.equal(cells[0], 'Asha');
+});
+
 T('companyFactsFromPage: size, industry, HQ, country and LinkedIn URL', () => {
   const red = companyFactsFromPage({
     title: 'Redington Board of Directors | Leadership & Governance',

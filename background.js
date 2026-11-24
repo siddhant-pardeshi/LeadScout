@@ -667,7 +667,12 @@ async function readOfficialLeadership(website, companyName) {
         if (people.some(p => p.name.toLowerCase() === validated.name.toLowerCase())) continue;
         people.push({
           ...validated,
-          url: '', handle: null, urlVerified: false,
+          // The company page may link this person's real profile. Keep it, but
+          // leave urlVerified false: we read a link, we did not load the profile.
+          url: validated.profileUrl || '',
+          handle: null,
+          urlVerified: false,
+          linkedinSource: validated.profileUrl ? 'official-page' : '',
           currentEmployer: 'official', source: 'official',
           verification: 'Official company source',
           confidence: 0.8

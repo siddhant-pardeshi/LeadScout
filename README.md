@@ -116,6 +116,7 @@ Settings → **API keys** saves each key into this browser only, with an optiona
 
 | Version | What changed |
 |---|---|
+| **2.2.1** | Official leadership rows now keep the LinkedIn profile link published on the company page. That URL used to be discarded, which is why the CSV column came back empty. The link is never marked verified, and a company-page link is still rejected. |
 | **2.2.0** | Side-panel workspace: extract the current LinkedIn profile, people list or company team page; capture a selection from the context menu; edit all ten columns in place; paced LinkedIn URL resolver with Verified Direct / Auto-Resolved / Needs Review; CSV and TSV from one row model. |
 | **2.1.1** | Results tables mirror the CSV contract exactly; leaner README and artwork. |
 | **2.1.0** | Single 10-column CSV export across popup and results. |
@@ -123,7 +124,7 @@ Settings → **API keys** saves each key into this browser only, with an optiona
 ## Development
 
 ```bash
-node tools/test.mjs           # 85 checks, including the extension import-graph check
+node tools/test.mjs           # 87 checks, including the extension import-graph check
 node tools/diag_linkcheck.mjs # standalone module-link check
 ```
 
