@@ -10,6 +10,9 @@ node tools/live-eval-evidence.mjs --offline
 node tools/live-eval-evidence.mjs groq
 ```
 
+`eval-evidence.mjs` is a 3-fixture deterministic smoke test with synthetic names.
+The 11-claim comparison below is the output of `live-eval-evidence.mjs --offline`.
+
 For a live run, provide `GROQ_API_KEY`, `GEMINI_API_KEY`, or
 `OPENROUTER_API_KEY` through your environment and choose the corresponding
 provider argument. The runner sends the public fixture excerpts to that

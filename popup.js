@@ -33,6 +33,16 @@ function sendMsg(msg) {
   });
 }
 
+// v1.4.1: the service worker may still be registering right after the
+// extension loads/reloads — one retry turns that race into a clean success.
+const SW_COLD_RE = /receiving end does not exist|could not establish connection|message port closed/i;
+async function sendMsgRetry(msg) {
+  const first = await sendMsg(msg);
+  if (first.ok || !SW_COLD_RE.test(String(first.error || ''))) return first;
+  await new Promise(r => setTimeout(r, 700));
+  return sendMsg(msg);
+}
+
 function stamp() {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
@@ -321,6 +331,7 @@ function renderResults(force) {
     tr.appendChild(tdD);
 
     tr.appendChild(tdText(r.comp.name || r.comp.input, 'co'));
+    if (r.comp.aiNote) tr.lastChild.title = r.comp.aiNote;
 
     const tdL = document.createElement('td');
     if (p.url) tdL.appendChild(linkEl(p.url, 'profile'));
@@ -371,9 +382,9 @@ async function doStart() {
   settings.provider = prov;
   settings.deepScan = $('optDeepScan').checked;
   settings.includeEmails = $('optEmails').checked;
-  await sendMsg({ type: 'setSettings', settings: settings });
+  await sendMsgRetry({ type: 'setSettings', settings: settings });
 
-  const res = await sendMsg({ type: 'start', items: items });
+  const res = await sendMsgRetry({ type: 'start', items: items });
   if (!res.ok) {
     toast('Start failed: ' + String(res.error || 'unknown'), 3200);
     return;
@@ -415,7 +426,7 @@ async function doRetryFailed() {
     type: q.type, slug: q.slug, name: q.name, input: q.input,
     status: 'queued', error: ''
   }));
-  await sendMsg({ type: 'start', items: requeued });
+  await sendMsgRetry({ type: 'start', items: requeued });
   toast('Retrying ' + requeued.length + ' failed companies');
   await loadState();
   startPolling();
@@ -431,7 +442,7 @@ async function doRefreshAll() {
     type: q.type, slug: q.slug, name: q.name, input: q.input,
     status: 'queued', error: ''
   }));
-  await sendMsg({ type: 'start', items: requeued });
+  await sendMsgRetry({ type: 'start', items: requeued });
   toast('Refreshing ' + requeued.length + ' companies with latest data…');
   await loadState();
   startPolling();
@@ -601,7 +612,7 @@ async function saveSettings() {
     }
   }
 
-  const res = await sendMsg({ type: 'setSettings', settings: next });
+  const res = await sendMsgRetry({ type: 'setSettings', settings: next });
   if (!res.ok) {
     toast('Save failed: ' + String(res.error || 'unknown'), 3000);
     return;
@@ -616,7 +627,7 @@ async function testKey() {
   const el = $('testResult');
   el.textContent = 'Testing…';
   el.className = 'test-result';
-  const res = await sendMsg({ type: 'testAI', provider: $('setProvider').value });
+  const res = await sendMsgRetry({ type: 'testAI', provider: $('setProvider').value });
   if (res.ok) {
     el.textContent = '✓ ' + res.message;
     el.classList.add('ok');
@@ -691,7 +702,7 @@ async function toggleTheme() {
   const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
   settings.theme = next;
-  await sendMsg({ type: 'setSettings', settings: settings });
+  await sendMsgRetry({ type: 'setSettings', settings: settings });
 }
 
 async function init() {
@@ -706,6 +717,21 @@ async function init() {
   renderResults(true);
   wire();
   if (job && (job.running || job.paused)) startPolling();
+  checkSwHealth();
+}
+
+// v1.4.1: detect a dead background worker up front and tell the user exactly
+// how to recover — no more silent failures (this is what "status code: 15"
+// looked like from the UI: saves and starts just silently failed).
+async function checkSwHealth() {
+  const res = await sendMsgRetry({ type: 'ping' });
+  const banner = $('swBanner');
+  if (res && res.ok) {
+    banner.classList.add('hidden');
+    return;
+  }
+  banner.textContent = '⚠ Background worker failed to start. Fix: chrome://extensions → LeadScout → Remove → "Load unpacked" this folder again (a full reinstall replaces any stale/mixed files). Detail: ' + String(res && res.error ? res.error : 'no response');
+  banner.classList.remove('hidden');
 }
 
 document.addEventListener('DOMContentLoaded', init);

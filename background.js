@@ -16,7 +16,7 @@ import {
   slugFromUrl, titleCaseSlug, decodeBingUrl, parseProfileTitle, linkedinHandle,
   isLinkedInProfile, companyMatch, companyMatchPartial, emailFor, domainFromWebsite,
   extractSizeFromText, overlapTokens, kebabName, slugScore, looseResolveMatch,
-  roleCurrency, matchHunterEmail, cell
+  roleCurrency, matchHunterEmail, cell, nameEvidence
 } from './lib/parse.js';
 import { classifyDesignation, seniorityBonus } from './lib/rank.js';
 import { aiResearch } from './lib/ai.js';
@@ -254,7 +254,9 @@ function peopleFromSerp(serp, companyName, allowPartial) {
   return out;
 }
 
-function mergeAiPeople(base, aiPeople, serpHandles, companyName) {
+function mergeAiPeople(base, aiPeople, serp, companyName) {
+  const serpHandles = new Set((serp || []).map(r => linkedinHandle(r.url)).filter(Boolean));
+  let dropped = 0;
   for (const p of (aiPeople || [])) {
     if (!p || !p.name) continue;
     // v1.3: the AI is instructed to emit current:true only for people who
@@ -270,6 +272,26 @@ function mergeAiPeople(base, aiPeople, serpHandles, companyName) {
     if (handle && !serpHandles.has(handle)) url = '';      // never keep an unverifiable URL
     const verified = !!(handle && serpHandles.has(handle) && url);
 
+    // v1.4.1 anti-hallucination gate: the model's output is only a proposal.
+    // A person is kept when this company's own corpus mentions them; the role
+    // then comes from that result, never from the model's "current" claim.
+    let evidence = null;
+    if (verified) {
+      const idx = (serp || []).findIndex(r => linkedinHandle(r.url) === handle);
+      if (idx !== -1) {
+        const r = serp[idx];
+        const role = roleCurrency(companyMatch(r.title || '', companyName),
+          companyMatch(r.snippet || '', companyName), r.title || '', r.snippet || '', companyName);
+        if (role !== 'past') evidence = { index: idx, role };
+      }
+    } else {
+      evidence = nameEvidence(name, serp, companyName);
+    }
+    if (!evidence) {
+      dropped++;   // invented, out-of-company, or past-role person
+      continue;
+    }
+
     const existing = base.find(b =>
       (handle && b.handle === handle) ||
       b.name.toLowerCase() === name.toLowerCase());
@@ -282,13 +304,13 @@ function mergeAiPeople(base, aiPeople, serpHandles, companyName) {
     base.push({
       name, designation: desig, url, handle: handle || null,
       urlVerified: verified,
-      currentEmployer: p.current === true ? 'current' : 'snippet',
-      source: verified ? 'bing+ai' : 'ai',
+      currentEmployer: evidence.role,
+      source: verified ? 'bing+ai' : 'ai+corpus',
       confidence: Math.min(1, (Number(p.confidence) || 0.5) * (verified ? 1 : 0.85)),
       cat: cls.cat, pri: cls.pri, score: Math.round(cls.sc * (verified ? 1 : 0.85))
     });
   }
-  return base;
+  return { people: base, dropped };
 }
 
 function finalizePeople(people, domain, includeEmails, hunterData) {
@@ -361,33 +383,6 @@ async function guessCompanyByName(name) {
   return { slug: slug, data: out };
 }
 
-/**
- * Tier-2 resolver gate: recall-friendly matching for Bing company-page results.
- * Returns a confidence tier (2 strong / 1 weak / 0 reject). The strict
- * all-token gate from v1.1 rejected correct pages whose LinkedIn title is
- * shorter than the typed legal name ("Zoho" for "Zoho Corporation").
- */
-function looseResolveMatch(title, snippet, slug, name) {
-  const hay = String(title || '') + ' ' + String(snippet || '');
-  const low = hay.toLowerCase();
-  const nTokens = String(name || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/).filter(t => t.length >= 2);
-  if (!nTokens.length) return 0;
-  // strong: the full typed name appears in the result text
-  if (low.indexOf(String(name).toLowerCase()) !== -1) return 2;
-  // strong: every significant token present in title/snippet
-  if (nTokens.every(t => low.indexOf(t) !== -1)) return 2;
-  // medium: the slug alone covers every significant query token
-  const sTokens = String(slug || '').toLowerCase().split(/[-_]+/).filter(t => t.length >= 2);
-  const slugJoined = ' ' + sTokens.join(' ') + ' ';
-  if (nTokens.every(t => slugJoined.indexOf(' ' + t + ' ') !== -1)) return 2;
-  // weak: some token overlap on both the slug and the text (scoring picks the best)
-  const slugHit = nTokens.some(t => slugJoined.indexOf(' ' + t + ' ') !== -1);
-  const textHit = nTokens.some(t => low.indexOf(t) !== -1);
-  if (slugHit && textHit) return 1;
-  return 0;
-}
-
 // ------------------------------------------------------- main per-company ----
 
 // Hunter.io lookup with a per-domain cache (quota-friendly: one request per
@@ -427,6 +422,7 @@ async function researchCompany(item, idx) {
       name: item.name || titleCaseSlug(item.slug) || '',
       industry: '', size: '', hq: '', website: '', country: '',
       factSource: 'none',
+      aiDropped: 0,
       people: [], status: 'working', error: '', finishedAt: null
     };
     S.job.results.push(comp);
@@ -532,8 +528,9 @@ async function researchCompany(item, idx) {
       // grounded citations are real URLs — add them to the corpus before merging
       const extraSerp = (out.cites || []).map(c => ({ title: c.title, url: c.url, snippet: 'AI grounding citation' }));
       serp = serp.concat(extraSerp);
-      const serpHandles = new Set(serp.map(r => linkedinHandle(r.url)).filter(Boolean));
-      comp.people = mergeAiPeople(peopleFromSerp(serp, companyName(), allowPartial), out.people, serpHandles, companyName());
+      const merged = mergeAiPeople(peopleFromSerp(serp, companyName(), allowPartial), out.people, serp, companyName());
+      comp.people = merged.people;
+      comp.aiDropped = merged.dropped;
       // facts: never overwrite LinkedIn-verified facts; fill gaps only
       const c = out.company || {};
       if (!comp.industry && c.industry) comp.industry = cell(c.industry);
@@ -542,7 +539,8 @@ async function researchCompany(item, idx) {
       if (!comp.website && c.website) comp.website = cell(c.website);
       if (!comp.country && c.country) comp.country = cell(c.country);
       if (comp.factSource === 'none' && (comp.industry || comp.size || comp.hq)) comp.factSource = 'ai';
-      aiNote = out.note || 'ai';
+      aiNote = (out.note || 'ai') +
+        (merged.dropped ? ' · ' + merged.dropped + ' AI name(s) dropped — no corpus evidence' : '');
     } catch (e) {
       aiNote = 'ai-failed: ' + String(e.message || e).slice(0, 120);
       comp.people = peopleFromSerp(serp, companyName(), allowPartial);
@@ -659,7 +657,10 @@ async function closeWorkerTabs() {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
-      if (msg.type === 'start') {
+      if (msg.type === 'ping') {
+        // liveness probe from the popup — also confirms module state loaded
+        sendResponse({ ok: true, version: '1.4.1' });
+      } else if (msg.type === 'start') {
         await loadAll();
         const items = (msg.items || []).map((it, i) => ({
           id: 'c' + Date.now() + '_' + i,

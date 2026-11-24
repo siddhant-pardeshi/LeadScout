@@ -209,6 +209,7 @@ select:focus, .text-input:focus { border-color: var(--accent); }
   padding: 9px 12px; border-radius: 10px; font-size: 12px; margin-bottom: 8px;
 }
 .banner.warn { background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.4); color: var(--warn); }
+.banner.err { background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.45); color: var(--err); font-weight: 600; }
 
 .prog-actions { display: flex; gap: 6px; margin-bottom: 8px; }
 

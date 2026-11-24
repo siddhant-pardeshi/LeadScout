@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LeadScout — Bulk LinkedIn Decision-Maker Finder",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Research 50–100 companies in bulk (LinkedIn URLs or names) and export verified decision-makers to Excel-ready TSV/CSV. Current roles only. Optional free AI key (Groq/Gemini) and Hunter.io key for real emails. Bing-powered.",
   "minimum_chrome_version": "116",
   "permissions": [

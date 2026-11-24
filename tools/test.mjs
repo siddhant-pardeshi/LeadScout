@@ -4,7 +4,7 @@ import {
   parseInputs, slugFromUrl, titleCaseSlug, decodeBingUrl, parseProfileTitle,
   linkedinHandle, companyMatch, companyMatchPartial, domainFromWebsite, emailFor,
   buildTSV, buildCSV, extractSizeFromText, overlapTokens, kebabName, slugScore,
-  looseResolveMatch, roleCurrency, matchHunterEmail, cell
+  looseResolveMatch, roleCurrency, matchHunterEmail, cell, nameEvidence
 } from '../lib/parse.js';
 import { classifyDesignation, seniorityBonus } from '../lib/rank.js';
 import { extractJson, assertSafeUrl } from '../lib/ai.js';
@@ -283,6 +283,49 @@ T('roleCurrency: current titles are NOT marked past by "Founder"', () => {
   assert.equal(roleCurrency(true, false, 'John Smith - Founder & CEO at Acme | LinkedIn', '', 'Acme Corp'), 'current');
 });
 
+// ---- v1.4.1 AI corpus-grounding gate ----
+T('nameEvidence: grounded current role in the company corpus', () => {
+  const serp = [
+    { title: 'Jane Doe - CTO - Acme Corp | LinkedIn', snippet: 'Jane Doe is the CTO of Acme Corp.' },
+    { title: 'Bob Lee - VP Engineering - Acme Corp | LinkedIn', snippet: '' }
+  ];
+  const e = nameEvidence('Jane Doe', serp, 'Acme Corp');
+  assert.equal(e.index, 0);
+  assert.equal(e.role, 'current');
+});
+
+T('nameEvidence: model-invented or single-token names never pass', () => {
+  const serp = [{ title: 'Jane Doe - CTO - Acme Corp | LinkedIn', snippet: '' }];
+  assert.equal(nameEvidence('Mallory Ghost', serp, 'Acme Corp'), null);
+  assert.equal(nameEvidence('Jane', serp, 'Acme Corp'), null);
+});
+
+T('nameEvidence: name from another company is rejected', () => {
+  const serp = [{ title: 'Jane Doe - CTO - Globex | LinkedIn', snippet: '' }];
+  assert.equal(nameEvidence('Jane Doe', serp, 'Acme Corp'), null);
+});
+
+T('nameEvidence: past role before the company is rejected', () => {
+  const serp = [{ title: 'Jane Doe | LinkedIn', snippet: 'Former CTO at Acme Corp.' }];
+  assert.equal(nameEvidence('Jane Doe', serp, 'Acme Corp'), null);
+});
+
+T('nameEvidence: prefers the current mention over a past one', () => {
+  const serp = [
+    { title: 'Jane Doe | LinkedIn', snippet: 'Former CTO at Acme Corp.' },
+    { title: 'Jane Doe - CTO - Acme Corp | LinkedIn', snippet: '' }
+  ];
+  const e = nameEvidence('Jane Doe', serp, 'Acme Corp');
+  assert.equal(e.index, 1);
+  assert.equal(e.role, 'current');
+});
+
+T('nameEvidence: punctuation and name particles are tolerated', () => {
+  const serp = [{ title: "Anne-Marie O'Neil - Head of AI - Acme | LinkedIn", snippet: '' }];
+  const e = nameEvidence("Anne-Marie O'Neil", serp, 'Acme');
+  assert.equal(e.role, 'current');
+});
+
 // ---- v1.3 Hunter.io email matching ----
 T('matchHunterEmail: exact name match', () => {
   const r = matchHunterEmail('Jane Doe', [
@@ -329,6 +372,36 @@ T('buildTSV v1.3: 14 columns incl. Role Currency + HQ', () => {
   const core = buildTSV(comps, { core: true });
   assert.equal(core.split('\n')[0].split('\t').length, 7); // user's original template
 });
+
+// ---- v1.4.1 ESM link check (reproduces Chrome "status code: 15") ----
+// Plain node --check is parse-only and cannot see import-binding conflicts
+// (e.g. a local function shadowing an imported name). Importing the entry
+// files with the real module loader does. Anything other than hitting a
+// browser-only global (chrome/document/…) is fatal.
+const BENIGN_RE = /\b(chrome|document|window|localStorage|navigator|location|URL|fetch|AbortController|crypto)\s+is not defined\b/i;
+const ENTRIES = ['../background.js', '../popup.js', '../results.js'];
+
+await (async function linkCheck() {
+  const name = 'ESM link check: background/popup/results import chains';
+  try {
+    for (const entry of ENTRIES) {
+      const url = new URL(entry, import.meta.url).href;
+      try {
+        await import(url);
+      } catch (e) {
+        const msg = String((e && e.message) || e);
+        if (!BENIGN_RE.test(msg)) {
+          throw new Error(entry + ' → ' + msg.split('\n')[0]);
+        }
+      }
+    }
+    passed++;
+    console.log('  ok  ' + name);
+  } catch (e) {
+    failed++;
+    console.log('FAIL  ' + name + '  → ' + e.message);
+  }
+})();
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

@@ -165,6 +165,7 @@ function render(force) {
 
     tr.appendChild(tdText(c.country || '', 'ds'));
     tr.appendChild(tdText(c.name || c.input, 'co'));
+    if (c.aiNote) tr.lastChild.title = c.aiNote;
     tr.appendChild(tdText(c.size || '', 'ds'));
     tr.appendChild(tdText(c.industry || '', 'ds'));
 

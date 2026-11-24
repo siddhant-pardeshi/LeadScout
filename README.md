@@ -10,8 +10,8 @@ A Chrome extension that replaces the one-company-at-a-time ChatGPT workflow for 
 Runs 100% locally in your browser · powered by **Microsoft Bing** · AI-optional (free keys) · zero data leaves your machine except your own searches.
 
 [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/)
-[![Version](https://img.shields.io/badge/version-1.4.0-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
-[![Tests](https://img.shields.io/badge/tests-36%20passing-34D399)](#-testing--quality)
+[![Version](https://img.shields.io/badge/version-1.4.1-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
+[![Tests](https://img.shields.io/badge/tests-43%20passing-34D399)](#-testing--quality)
 [![License](https://img.shields.io/badge/license-MIT-34D399)](LICENSE)
 [![Bing](https://img.shields.io/badge/search-Bing-008373)](https://www.bing.com)
 
@@ -80,7 +80,7 @@ free API keys. **Captions:** [`docs/walkthrough.srt`](docs/walkthrough.srt)
 | **Current roles only** | A person is kept only with a **current** role at that company. Past markers ("Former CEO", "was CTO", "Ex-Founder") are dropped — even positionally-aware: "Acme Corp engineer, *previously at Google*" is kept; "*Former* CEO at Acme" is not |
 | **P1–P5 priority ranking** | P1 = C-suite/founders/CTO/CIO/Chief-AI · P2 = heads of Product/Engineering/AI/Digital · down to managers — encoded from the full B2B designation list |
 | **Smart title parsing** | Handles `"Jane Doe - CEO at Acme \| LinkedIn"`, `"Jane Doe CEO at Acme"`, affiliation-only rows and junk rows (`followers`, `on LinkedIn:` posts) |
-| **AI enrichment (optional)** | Groq / Gemini / OpenRouter / any OpenAI-compatible endpoint structures the results, fills company facts, and is **hard-restricted**: `current:true` only, URLs must exist verbatim in the search corpus or they're dropped |
+| **AI enrichment (optional)** | Groq / Gemini / OpenRouter / any OpenAI-compatible endpoint structures the results and fills company facts. **Corpus-gated:** every AI-proposed person must be named in that company's own search results, and their role is re-derived from that result — invented or out-of-company names are dropped and reported. URLs must exist verbatim in the corpus |
 | **Gemini web-grounding** | When a company yields thin results, Gemini (free tier) performs real Google-search grounding to recover people and facts |
 
 ### 📧 Emails
@@ -143,10 +143,17 @@ No keys at all? LeadScout still works — Bing extraction only, same TSV, just f
 
 ## 🧪 Testing & quality
 
-- **36 unit tests** covering input parsing, Bing-redirect decoding, person-title extraction,
-  company matching, the 3-tier resolver, role-currency logic, Hunter matching and TSV/CSV builders
+- **43 unit tests** covering input parsing, Bing-redirect decoding, person-title extraction,
+  company matching, the 3-tier resolver, role-currency logic, the AI corpus-grounding gate,
+  Hunter matching and TSV/CSV builders
   ```bash
   node tools/test.mjs
+  ```
+- **Evidence evaluation** — a local verifier that only accepts role claims backed by cited,
+  dated sources (it abstains instead of guessing):
+  ```bash
+  node tools/eval-evidence.mjs
+  node tools/live-eval-evidence.mjs --offline
   ```
 - DOM ids ↔ JS, imports ↔ exports, manifest JSON — cross-checked in CI-style validation
 - Security: SSRF-guarded endpoints (localhost/private ranges refused), scheme-checked links,
@@ -164,6 +171,7 @@ LeadScout/
 │   ├── parse.js         pure logic: parsing, resolver, role-currency, TSV/CSV  ← unit-tested
 │   ├── rank.js          designation → category/priority engine                  ← unit-tested
 │   ├── ai.js            Groq/Gemini/OpenRouter adapters + SSRF-safe URLs
+│   ├── verify-lead.js   evidence verifier: cited, dated role claims only
 │   ├── hunter.js        Hunter.io domain-search client
 │   └── extract.js       DOM extractors injected into Bing/LinkedIn pages
 ├── assets/              animated SVG artwork (SMIL — the animations you're seeing)
@@ -199,6 +207,7 @@ before first contact.
 
 | Version | Highlights |
 |---|---|
+| **1.4.1** | Service-worker recovery (the "status code: 15" dead-end now self-heals + shows a fix banner), Gemini model-id override honored in path/test, **AI corpus-grounding gate** (ungrounded AI names dropped, roles re-derived from evidence), evidence verifier + 11-claim evaluation runner |
 | **1.4.0** | Security (scheme-guarded links), render dirty-checks (no UI lag), worker-tab cleanup, **⟳ Refresh all**, AI model overrides, Hunter pattern fix, directory-handle filter |
 | 1.3.0 | **Current roles only** (Role Currency engine), Hunter.io real emails, one-click 14-column TSV, filter-aware exports |
 | 1.2.0 | 3-tier name→page resolver, JSON-LD/`og:` fallbacks, `/about/` deep scan, UI redesign |
