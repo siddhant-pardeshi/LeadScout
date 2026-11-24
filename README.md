@@ -11,8 +11,8 @@ Runs in your browser · Bing + company-owned pages · works without any API key 
 
 [![Chrome MV3](https://img.shields.io/badge/Manifest-V3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/)
 [![Edge](https://img.shields.io/badge/Microsoft%20Edge-supported-0078D7?logo=microsoftedge&logoColor=white)](https://www.microsoft.com/edge)
-[![Version](https://img.shields.io/badge/version-1.7.0-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
-[![Tests](https://img.shields.io/badge/tests-64%20passing-34D399)](#-testing--quality)
+[![Version](https://img.shields.io/badge/version-1.7.1-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
+[![Tests](https://img.shields.io/badge/tests-65%20passing-34D399)](#-testing--quality)
 [![License](https://img.shields.io/badge/license-MIT-34D399)](LICENSE)
 [![Bing](https://img.shields.io/badge/search-Bing-008373)](https://www.bing.com)
 
@@ -254,7 +254,7 @@ Key invariants live in code: profile URLs from real results, AI names grounded i
 ## 🧪 Testing and quality
 
 ```bash
-node tools/test.mjs                  # 64 deterministic checks + MV3/ESM smoke tests
+node tools/test.mjs                  # 65 deterministic checks + MV3/ESM smoke tests
 node tools/diag_linkcheck.mjs        # standalone import-graph check
 node tools/eval-evidence.mjs         # evidence-verifier smoke test
 node tools/live-eval-evidence.mjs --offline   # 11-claim comparison
@@ -296,6 +296,7 @@ The suite covers input parsing, Bing redirect decoding, title extraction, compan
 
 | Version | Highlights |
 |---|---|
+| **1.7.1** | Removed the redundant optional `https://*/*` host permission (already covered by required host access); added a manifest regression test. |
 | **1.7.0** | Direct company-site leadership recovery (JSON-LD, heading pairs, cards), website inference when LinkedIn is walled, Cloudflare/authwall detection, source-blocked/no-profile outcomes, evidence URL + source columns, broad company-site host access; live-verified on Twilio, HubSpot and Freshworks. |
 | **1.6.0** | Fixed Bing profile-anchor extraction when generic results are present; decodes Bing-wrapped profile links; source-aware company-site leadership fallback; persisted candidate diagnostics and honest blocked/error/no-profile states; Chrome 116-compatible alarm recovery. |
 | **1.5.0** | **Persistent API key vault** with saved/expiry dates, per-key save/clear, show/hide, test-and-record; expiry warning banner; Microsoft Edge/Bing compatibility pass; store-safe manifest; custom-endpoint key fixed |

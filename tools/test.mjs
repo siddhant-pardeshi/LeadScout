@@ -1,5 +1,6 @@
 // LeadScout logic tests — run with: node tools/test.mjs
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {
   parseInputs, slugFromUrl, titleCaseSlug, decodeBingUrl, parseProfileTitle,
   linkedinHandle, companyMatch, companyMatchPartial, domainFromWebsite, emailFor,
@@ -20,6 +21,14 @@ function T(name, fn) {
   try { fn(); passed++; console.log('  ok  ' + name); }
   catch (e) { failed++; console.log('FAIL  ' + name + '  → ' + e.message); }
 }
+
+T('manifest: optional host permissions are not redundant with required hosts', () => {
+  const manifest = JSON.parse(fs.readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
+  const required = new Set(manifest.host_permissions || []);
+  const optional = manifest.optional_host_permissions || [];
+  assert.deepEqual(optional.filter(pattern => required.has(pattern)), []);
+  assert.ok(optional.includes('http://*/*'));
+});
 
 // ---------------- input parsing ----------------
 T('parseInputs: url / name / mixed lines dedupe', () => {
@@ -810,7 +819,7 @@ await (async function backgroundSmoke() {
     runtime: {
       onMessage: { addListener: (fn) => { messageHandler = fn; } },
       onInstalled: { addListener: () => {} },
-      getManifest: () => ({ version: '1.7.0' }),
+      getManifest: () => ({ version: '1.7.1' }),
       getPlatformInfo: () => {}
     }
   };
@@ -828,7 +837,7 @@ await (async function backgroundSmoke() {
       });
       assert.equal(keepAlive, true);
     });
-    assert.deepEqual(response, { ok: true, version: '1.7.0' });
+    assert.deepEqual(response, { ok: true, version: '1.7.1' });
     passed++;
     console.log('  ok  ' + name);
   } catch (e) {
