@@ -159,11 +159,11 @@ function renderRowBadge(row) {
     badge.className = 'badge ' + status;
     badge.textContent = RESOLVE_STATUS[status];
     holder.appendChild(badge);
-  } else if (!row.linkedinUrl) {
+  } else if (!row.linkedinUrl && (row.firstName || row.lastName) && verifySearchUrl(row)) {
     const link = document.createElement('a');
     link.className = 'badge review';
     link.textContent = 'Verify';
-    link.href = verifySearchUrl(row) || '#';
+    link.href = verifySearchUrl(row);
     link.target = '_blank';
     link.rel = 'noopener';
     link.title = 'Open a search to find this person yourself';

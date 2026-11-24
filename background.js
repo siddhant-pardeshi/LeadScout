@@ -1274,7 +1274,15 @@ async function resolveCompanyProfiles(comp) {
     person.resolveState = (res && res.state) || 'review';
     if (res && (res.state === 'captcha' || res.state === 'consent' || res.state === 'error')) {
       strikes += 1;
-      if (strikes >= 2) { S.resolveStop = true; out.state = 'blocked'; break; }
+      if (strikes >= 2) {
+        S.resolveStop = true;
+        out.state = 'blocked';
+        // Tell the user why URLs stopped appearing instead of failing silently.
+        S.job.attention = 'Bing needs a human check before LinkedIn profiles can be looked up. Complete it in the Bing tab, then press Resume.';
+        notify('ls-resolve', 'Profile lookup stopped', 'Bing needs a human check — complete it in the Bing tab, then Resume.');
+        await persist();
+        break;
+      }
     } else {
       strikes = 0;
     }
@@ -1357,6 +1365,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg.type === 'resume') {
         S.job.paused = false;
         S.job.attention = null;
+        S.resolveStop = false;
         // companies that were mid-flight (or aborted) when paused go back to queued
         const cur = S.job.queue[S.job.cursor];
         if (cur && cur.status === 'working') cur.status = 'queued';

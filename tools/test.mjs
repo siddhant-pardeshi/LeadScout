@@ -7,7 +7,8 @@ import {
   buildCSV, splitProspectName, CRM_EXPORT_HEADERS, extractSizeFromText, overlapTokens, kebabName, slugScore,
   looseResolveMatch, roleCurrency, matchHunterEmail, cell, exportCell, nameEvidence,
   officialLeadershipCandidate, inferWebsiteFromSerp, officialPageCandidate, classifyOutcome,
-  domainMatchesCompany, websiteCandidates, companyFactsFromPage, resolveTargets
+  domainMatchesCompany, websiteCandidates, companyFactsFromPage, resolveTargets,
+  linkedinUrlForExport
 } from '../lib/parse.js';
 import {
   RECORD_FIELDS, RESOLVE_STATUS, emptyRecord, normalizeRecord, recordKey, mergeRecords,
@@ -1143,6 +1144,22 @@ T('records: TSV collapses tabs and newlines so the grid cannot shift', () => {
   assert.equal(cells[2], 'Head of Sales');
 });
 
+T('LinkedIn URLs are canonical: one profile has one identity', () => {
+  const variants = [
+    'https://in.linkedin.com/in/Asha-Shah/?trk=x',
+    'https://www.linkedin.com/in/asha-shah',
+    'https://linkedin.com/in/asha-shah/'
+  ];
+  for (const v of variants) {
+    assert.equal(linkedinUrlForExport(v), 'https://www.linkedin.com/in/asha-shah/');
+  }
+  assert.equal(linkedinUrlForExport('https://www.linkedin.com/company/acme/'), '');
+  const a = mergeRecords([{ firstName: 'Asha', lastName: 'Shah', linkedinUrl: variants[0] }], []);
+  const b = mergeRecords(a.rows, [{ firstName: 'Asha', lastName: 'Shah', linkedinUrl: variants[1], company: 'Acme Corp' }]);
+  assert.equal(b.rows.length, 1, 'in./www. variants are the same person');
+  assert.equal(b.rows[0].company, 'Acme Corp');
+});
+
 T('records: resolver query and verification link are honest', () => {
   const rec = { firstName: 'Asha', lastName: 'Shah', company: 'Acme Corp' };
   // Measured on Bing: a second quoted phrase returns zero results, so the
@@ -1158,7 +1175,7 @@ T('records: resolver query and verification link are honest', () => {
   assert.match(verifySearchUrl(rec), /^https:\/\/www\.google\.com\/search\?q=/);
   // A profile is accepted only when the result names the person and the company.
   const good = [{ url: 'https://in.linkedin.com/in/asha-shah/', title: 'Asha Shah - CTO - Acme Corp | LinkedIn' }];
-  assert.equal(pickProfileResult(good, rec), 'https://in.linkedin.com/in/asha-shah/');
+  assert.equal(pickProfileResult(good, rec), 'https://www.linkedin.com/in/asha-shah/');
   const sameName = [{ url: 'https://www.linkedin.com/in/asha-shah-2/', title: 'Asha Shah - Designer | LinkedIn' }];
   assert.equal(pickProfileResult(sameName, rec), '', 'a same-name stranger is not a match');
   const companyPage = [{ url: 'https://www.linkedin.com/company/acme/', title: 'Acme Corp | LinkedIn' }];

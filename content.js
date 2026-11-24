@@ -58,6 +58,7 @@ export function extractPageLeads(options = {}) {
     if (!v || v.length < 3 || v.length > 60) return false;
     if (NAME_STOP.test(v) || SECTION_HEAD.test(v)) return false;
     if (/[@|•·]/.test(v)) return false;
+    if (/\s(?:at|@)\s/i.test(v)) return false;
     if (/\d/.test(v)) return false;
     const words = v.split(/\s+/);
     if (words.length < 2 || words.length > 5) return false;
@@ -247,7 +248,9 @@ export function extractPageLeads(options = {}) {
       firstName: splitName(name).firstName,
       lastName: splitName(name).lastName,
       designation: clean(person.jobTitle || ''),
-      email: clean(person.email || '').replace(/^mailto:/i, '').toLowerCase() || emailIn(textOf(document.body)),
+      // Only this person's own declared email. A page-wide address would be
+      // attached to everyone in the JSON-LD block, which is misattribution.
+      email: clean(person.email || '').replace(/^mailto:/i, '').toLowerCase(),
       company: worksName || siteCompany,
       companySize: '',
       country: countryName(addr.addressCountry) || countryIn([addr.addressLocality, addr.addressRegion].filter(Boolean).join(', ')) || pageCountry,

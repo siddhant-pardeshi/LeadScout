@@ -116,6 +116,7 @@ Settings → **API keys** saves each key into this browser only, with an optiona
 
 | Version | What changed |
 |---|---|
+| **2.3.1** | Bug sweep: a page-wide email no longer attaches to every JSON-LD person; `in.linkedin.com` and `www.linkedin.com` are one identity (no duplicate rows, canonical CSV); the resolver circuit breaker clears on Resume; a consent/captcha during resolution now raises a visible notice instead of silently blanking; the panel works at 380px with an internal table scroll; empty rows no longer show a Verify link; “Asha at Acme” is rejected as a name. |
 | **2.3.0** | Profile resolution actually returns URLs now. Two bugs fixed: the Bing query `site:linkedin.com/in/ "Name" "Company"` returns **zero** results (a second quoted phrase collapses the set) so the name-only query runs first with the company as a narrower retry; and `chrome.tabs.update` resolves before navigation starts, so the extractor was reading the previous page — navigation now waits for the tab to leave the old document. Research rows also get a bounded resolution pass (6 per company, stops if Bing asks for consent/captcha), and a blank cell now explains itself on hover. |
 | **2.2.1** | Official leadership rows now keep the LinkedIn profile link published on the company page. That URL used to be discarded, which is why the CSV column came back empty. The link is never marked verified, and a company-page link is still rejected. |
 | **2.2.0** | Side-panel workspace: extract the current LinkedIn profile, people list or company team page; capture a selection from the context menu; edit all ten columns in place; paced LinkedIn URL resolver with Verified Direct / Auto-Resolved / Needs Review; CSV and TSV from one row model. |
@@ -125,7 +126,7 @@ Settings → **API keys** saves each key into this browser only, with an optiona
 ## Development
 
 ```bash
-node tools/test.mjs           # 88 checks, including the extension import-graph check
+node tools/test.mjs           # 89 checks, including the extension import-graph check
 node tools/diag_linkcheck.mjs # standalone module-link check
 ```
 

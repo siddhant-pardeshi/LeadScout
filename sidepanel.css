@@ -28,7 +28,6 @@ html, body { height: 100%; }
 
 body {
   margin: 0;
-  min-width: 640px;
   background:
     radial-gradient(900px 480px at 110% -12%, rgba(124, 58, 237, 0.26), transparent 60%),
     radial-gradient(720px 440px at -15% 8%, rgba(34, 211, 238, 0.14), transparent 58%),
