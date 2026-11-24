@@ -7,12 +7,13 @@ import {
   buildCSV, splitProspectName, CRM_EXPORT_HEADERS, extractSizeFromText, overlapTokens, kebabName, slugScore,
   looseResolveMatch, roleCurrency, matchHunterEmail, cell, exportCell, nameEvidence,
   officialLeadershipCandidate, inferWebsiteFromSerp, officialPageCandidate, classifyOutcome,
-  domainMatchesCompany, websiteCandidates, companyFactsFromPage
+  domainMatchesCompany, websiteCandidates, companyFactsFromPage, resolveTargets
 } from '../lib/parse.js';
 import {
   RECORD_FIELDS, RESOLVE_STATUS, emptyRecord, normalizeRecord, recordKey, mergeRecords,
   recordRow, recordsToCSV, recordsToTSV, linkedinSearchQuery, verifySearchUrl,
-  needsResolution, parseSelectionText, isBlankRecord
+  needsResolution, parseSelectionText, isBlankRecord,
+  linkedinSearchQueries, pickProfileResult, companyToken
 } from '../lib/records.js';
 import { classifyDesignation, seniorityBonus } from '../lib/rank.js';
 import { extractJson, assertSafeUrl } from '../lib/ai.js';
@@ -416,6 +417,23 @@ T('a company-page profile link reaches the CSV LINKEDIN_URL cell', () => {
   const cells = csv.trim().split('\r\n')[1].split(',');
   assert.equal(cells[cells.length - 1], 'https://www.linkedin.com/in/asha-shah/');
   assert.equal(cells[0], 'Asha');
+});
+
+T('resolveTargets: only people with no URL, capped and de-duplicated', () => {
+  const people = [
+    { name: 'Asha Shah', url: 'https://www.linkedin.com/in/asha-shah/' },
+    { name: 'Ravi Menon', url: '' },
+    { name: 'ravi menon', url: '' },
+    { name: 'Priya Kumar' },
+    { name: '', url: '' },
+    { name: 'Sam Lee', url: '' },
+    { name: 'Nina Rao', url: '' }
+  ];
+  const out = resolveTargets(people, 3);
+  assert.equal(out.length, 3);
+  assert.deepEqual(out.map(p => p.name), ['Ravi Menon', 'Priya Kumar', 'Sam Lee']);
+  assert.equal(resolveTargets(people, 0).length, 0);
+  assert.equal(resolveTargets(people, 99).length, 4, 'capped at ten, and one duplicate name');
 });
 
 T('companyFactsFromPage: size, industry, HQ, country and LinkedIn URL', () => {
@@ -1127,11 +1145,25 @@ T('records: TSV collapses tabs and newlines so the grid cannot shift', () => {
 
 T('records: resolver query and verification link are honest', () => {
   const rec = { firstName: 'Asha', lastName: 'Shah', company: 'Acme Corp' };
-  assert.equal(linkedinSearchQuery(rec), 'site:linkedin.com/in/ "Asha Shah" "Acme Corp"');
+  // Measured on Bing: a second quoted phrase returns zero results, so the
+  // name-only query must come first.
+  assert.equal(linkedinSearchQuery(rec), 'site:linkedin.com/in "Asha Shah"');
+  assert.deepEqual(linkedinSearchQueries(rec), [
+    'site:linkedin.com/in "Asha Shah"',
+    'site:linkedin.com/in "Asha Shah" Acme Corp'
+  ]);
   assert.equal(linkedinSearchQuery({ firstName: 'Asha', lastName: 'Shah', designation: 'CTO' }),
-    'site:linkedin.com/in/ "Asha Shah" "CTO"');
+    'site:linkedin.com/in "Asha Shah"');
   assert.equal(linkedinSearchQuery({ firstName: '', lastName: '' }), '');
   assert.match(verifySearchUrl(rec), /^https:\/\/www\.google\.com\/search\?q=/);
+  // A profile is accepted only when the result names the person and the company.
+  const good = [{ url: 'https://in.linkedin.com/in/asha-shah/', title: 'Asha Shah - CTO - Acme Corp | LinkedIn' }];
+  assert.equal(pickProfileResult(good, rec), 'https://in.linkedin.com/in/asha-shah/');
+  const sameName = [{ url: 'https://www.linkedin.com/in/asha-shah-2/', title: 'Asha Shah - Designer | LinkedIn' }];
+  assert.equal(pickProfileResult(sameName, rec), '', 'a same-name stranger is not a match');
+  const companyPage = [{ url: 'https://www.linkedin.com/company/acme/', title: 'Acme Corp | LinkedIn' }];
+  assert.equal(pickProfileResult(companyPage, rec), '');
+  assert.equal(companyToken('Godrej Industries Group'), 'godrej');
   assert.equal(needsResolution(rec), true);
   assert.equal(needsResolution({ linkedinUrl: 'https://www.linkedin.com/in/xavier-doe/' }), false);
 });

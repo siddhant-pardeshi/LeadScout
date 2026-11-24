@@ -17,7 +17,7 @@ import {
   slugFromUrl, titleCaseSlug, decodeBingUrl, parseProfileTitle, linkedinHandle,
   isLinkedInProfile, companyMatch, companyMatchPartial, emailFor, domainFromWebsite,
   extractSizeFromText, overlapTokens, kebabName, slugScore, looseResolveMatch,
-  roleCurrency, matchHunterEmail, cell, nameEvidence, officialLeadershipCandidate,
+  roleCurrency, matchHunterEmail, cell, nameEvidence, officialLeadershipCandidate, resolveTargets,
   inferWebsiteFromSerp, officialPageCandidate, classifyOutcome, domainMatchesCompany, websiteCandidates,
   companyFactsFromPage
 } from './lib/parse.js';
@@ -26,7 +26,7 @@ import { aiResearch, aiTestKey } from './lib/ai.js';
 import { hunterDomainSearch } from './lib/hunter.js';
 import { extractBingResults, extractLinkedInCompany, extractOfficialLeadership } from './lib/extract.js';
 import { extractPageLeads } from './content.js';
-import { normalizeRecord, linkedinSearchQuery } from './lib/records.js';
+import { normalizeRecord, linkedinSearchQueries, pickProfileResult } from './lib/records.js';
 
 // ------------------------------------------------------------ app state ----
 
@@ -105,8 +105,28 @@ async function ensureTab(which, url) {
     tabId = created.id;
     S[key] = tabId;
   }
-  await chrome.tabs.update(tabId, { url: wants });
+  await navigateTab(tabId, wants);
   return tabId;
+}
+
+/**
+ * Start a navigation and wait until the tab has actually moved off the old
+ * document. chrome.tabs.update resolves before the new load begins, so a
+ * caller that checks tab.status immediately can still see the PREVIOUS page as
+ * "complete" and read its DOM — which silently returns the last search's
+ * results. Waiting for loading (or a changed URL) closes that race.
+ */
+async function navigateTab(tabId, url) {
+  let before = '';
+  try { before = String((await chrome.tabs.get(tabId)).url || ''); } catch (e) { before = ''; }
+  await chrome.tabs.update(tabId, { url });
+  const t0 = Date.now();
+  while (Date.now() - t0 < 5000) {
+    let tab;
+    try { tab = await chrome.tabs.get(tabId); } catch (e) { return; }
+    if (tab.status !== 'complete' || (tab.url && tab.url !== before)) return;
+    await sleep(120);
+  }
 }
 
 async function waitForTabLoad(tabId, timeoutMs) {
@@ -1034,6 +1054,7 @@ async function researchCompany(item, idx) {
     hunterData = await hunterLookup(domain, SETTINGS.keys.hunter);
   }
   comp.people = finalizePeople(comp.people, domain, SETTINGS.includeEmails !== false, hunterData);
+  comp.discovery.resolve = await resolveCompanyProfiles(comp);
   comp.aiNote = aiNote;
   buildReviewOutcome(comp);
   comp.status = 'done';
@@ -1164,19 +1185,23 @@ async function searchProfilesOnce(query) {
   const url = 'https://' + host + '/search?q=' + encodeURIComponent(query) + '&count=20';
   const tabId = await ensureTab('bing', url);
   await waitForTabLoad(tabId, 22000);
+  // Bing paints its result list after load; reading immediately returns an
+  // empty shell, which used to look like "no match" for a profile that exists.
+  await sleep(900);
   let res = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const frames = await chrome.scripting.executeScript({ target: { tabId }, func: extractBingResults });
       res = frames && frames[0] && frames[0].result;
     } catch (e) { res = null; }
     if (res && (res.captcha || res.consent || (res.results || []).length)) break;
-    await sleep(1300);
+    await sleep(1700);
   }
   if (!res) return { state: 'error', results: [] };
   if (res.captcha) return { state: 'captcha', results: [] };
   if (res.consent) return { state: 'consent', results: [] };
-  return { state: 'ok', results: (res.results || []).map(r => ({ ...r, url: decodeBingUrl(r.url) })) };
+  const results = (res.results || []).map(r => ({ ...r, url: decodeBingUrl(r.url) }));
+  return { state: results.length ? 'ok' : 'empty', results };
 }
 
 /**
@@ -1187,22 +1212,71 @@ async function searchProfilesOnce(query) {
 async function resolveLinkedInRecord(record) {
   const rec = normalizeRecord(record);
   if (rec.linkedinUrl) return { status: 'direct', url: rec.linkedinUrl, state: 'already' };
-  const query = linkedinSearchQuery(rec);
-  if (!query) return { status: 'review', url: '', state: 'no_name' };
+  const queries = linkedinSearchQueries(rec);
+  if (!queries.length) return { status: 'review', url: '', state: 'no_name' };
   return paceResolve(async () => {
-    const out = await searchProfilesOnce(query);
-    if (out.state !== 'ok') return { status: 'review', url: '', state: out.state, query };
-    const tokens = [rec.firstName, rec.lastName]
-      .filter(Boolean).map(t => t.toLowerCase()).filter(t => t.length > 1);
-    const hit = out.results.find(r => {
-      const profile = cleanProfileUrl(r.url);
-      if (!profile) return false;
-      const hay = (String(r.title || '') + ' ' + String(r.snippet || '')).toLowerCase();
-      return tokens.length ? tokens.every(t => hay.includes(t)) : false;
-    });
-    if (!hit) return { status: 'review', url: '', state: 'no_match', query };
-    return { status: 'auto', url: cleanProfileUrl(hit.url), state: 'ok', query };
+    // Two queries at most: the plain name query yields the profile, the
+    // company-qualified one is a narrower retry when the first is ambiguous.
+    let last = { state: 'no_match', query: queries[0] };
+    for (const query of queries.slice(0, 2)) {
+      const out = await searchProfilesOnce(query);
+      if (out.state !== 'ok') return { status: 'review', url: '', state: out.state, query };
+      const url = pickProfileResult(out.results, rec);
+      if (url) return { status: 'auto', url, state: 'ok', query };
+      last = {
+        state: 'no_match', query,
+        resultCount: out.results.length,
+        firstTitle: String((out.results[0] && out.results[0].title) || '').slice(0, 90)
+      };
+    }
+    return { status: 'review', url: '', state: last.state, query: last.query, resultCount: last.resultCount, firstTitle: last.firstTitle };
   });
+}
+
+/**
+ * Fill blank profile URLs with the same strict, paced lookup the workspace uses.
+ * Official leadership pages frequently name people without linking them, so
+ * without this the CSV's LINKEDIN_URL column stays empty.  Bounded per company,
+ * and aborted for the rest of the run if Bing starts refusing.
+ */
+async function resolveCompanyProfiles(comp) {
+  const out = { attempts: 0, resolved: 0, state: 'off' };
+  if (SETTINGS.resolveProfiles === false) return out;
+  const max = SETTINGS.maxResolvePerCompany == null ? 6 : SETTINGS.maxResolvePerCompany;
+  const targets = resolveTargets(comp.people, max);
+  if (!targets.length) { out.state = 'none'; return out; }
+  out.state = 'ok';
+  let strikes = 0;
+  for (const person of targets) {
+    if (S.resolveStop) { out.state = 'blocked'; break; }
+    if (!S.job.running || S.job.paused) { out.state = 'paused'; break; }
+    out.attempts += 1;
+    let res;
+    try {
+      res = await resolveLinkedInRecord({
+        name: person.name, company: comp.name || comp.input, linkedinUrl: person.url
+      });
+    } catch (e) {
+      res = { status: 'review', url: '', state: 'error' };
+    }
+    if (res && res.status === 'auto' && res.url) {
+      person.url = res.url;
+      person.urlVerified = false;
+      person.linkedinSource = 'search';
+      person.resolveState = 'auto';
+      out.resolved += 1;
+      strikes = 0;
+      continue;
+    }
+    person.resolveState = (res && res.state) || 'review';
+    if (res && (res.state === 'captcha' || res.state === 'consent' || res.state === 'error')) {
+      strikes += 1;
+      if (strikes >= 2) { S.resolveStop = true; out.state = 'blocked'; break; }
+    } else {
+      strikes = 0;
+    }
+  }
+  return out;
 }
 
 function setupWorkspaceMenu() {
@@ -1262,6 +1336,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         S.runId++; // invalidate any in-flight run generation
         S.job.running = true;
         S.job.paused = false;
+        S.resolveStop = false;
         S.job.attention = null;
         S.job.startedAt = Date.now();
         S.job.finishedAt = null;

@@ -214,8 +214,24 @@ function render(force) {
 
     const profileUrl = linkedinUrlForExport(p.url);
     const tdL = document.createElement('td');
-    if (profileUrl) tdL.appendChild(linkEl(profileUrl, 'profile'));
-    else tdL.appendChild(document.createTextNode('—'));
+    if (profileUrl) {
+      const a = linkEl(profileUrl, 'profile');
+      if (p.linkedinSource === 'official-page') a.title = 'Link published on the company page (profile not loaded)';
+      if (p.linkedinSource === 'search') a.title = 'Found by a paced profile search';
+      tdL.appendChild(a);
+    } else {
+      const dash = document.createElement('span');
+      dash.textContent = '—';
+      // Say why it is blank instead of leaving a silent gap.
+      const reason = p.resolveState === 'consent' ? 'Bing needs consent — complete it, then Resolve again'
+        : p.resolveState === 'captcha' ? 'Bing asked for human verification — complete it, then Resolve again'
+        : p.resolveState === 'no_match' ? 'Searched, but no profile naming this person was found'
+        : p.resolveState === 'no_name' ? 'Name is too incomplete to search'
+        : 'No profile link was found on the company page or in search';
+      dash.title = reason;
+      dash.setAttribute('aria-label', reason);
+      tdL.appendChild(dash);
+    }
     tr.appendChild(tdL);
 
     frag.appendChild(tr);

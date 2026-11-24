@@ -427,6 +427,7 @@ async function doStart() {
   settings.provider = prov;
   settings.deepScan = $('optDeepScan').checked;
   settings.includeEmails = $('optEmails').checked;
+  settings.resolveProfiles = $('optResolve').checked;
   await sendMsgRetry({ type: 'setSettings', settings: settings });
 
   const res = await sendMsgRetry({ type: 'start', items: items });
@@ -971,6 +972,7 @@ async function init() {
   $('optProvider').value = settings.provider || 'groq';
   $('optDeepScan').checked = settings.deepScan !== false;
   $('optEmails').checked = settings.includeEmails !== false;
+  $('optResolve').checked = settings.resolveProfiles !== false;
   updateInputCount();
   renderProgress();
   renderResults(true);
