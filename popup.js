@@ -241,7 +241,7 @@ function rowMatches(r, filter, search) {
   const cat = r.p ? r.p.cat : 'review';
   if (filter === 'unverified') {
     if (r.kind !== 'person') return false;
-    if (r.p.urlVerified) return false;
+    if (r.p.urlVerified || r.p.sourceType === 'official') return false;
   } else if (filter === 'review') {
     if (r.kind !== 'review') return false;
   } else if (filter !== 'all') {
@@ -282,6 +282,36 @@ function tdText(text, cls) {
   return td;
 }
 
+function reviewDisplay(comp) {
+  const code = comp.outcome || (comp.status === 'failed' ? 'search_error' : 'no_public_match');
+  const defaults = {
+    search_blocked: ['SEARCH BLOCKED', 'Bing needs attention before research can continue'],
+    search_error: ['SEARCH ERROR', 'Search results could not be read'],
+    no_profile_results: ['NO PROFILES', 'No matching LinkedIn profiles were returned by Bing'],
+    candidates_rejected: ['REVIEW', 'Profile candidates did not pass company/current-role checks'],
+    no_public_match: ['REVIEW', 'No evidence-backed decision-maker was found']
+  };
+  const pair = defaults[code] || defaults.no_public_match;
+  return {
+    pill: pair[0], text: comp.reviewReason || pair[1],
+    title: comp.reviewDetail || comp.error || '',
+    cls: code === 'search_blocked' || code === 'search_error' ? 'est' : 'u'
+  };
+}
+
+function verificationDisplay(person) {
+  if (person.urlVerified) return { text: 'VERIFIED', cls: 'v' };
+  if (person.sourceType === 'official') return { text: 'OFFICIAL', cls: 'v' };
+  return { text: 'UNVERIFIED', cls: 'u' };
+}
+
+function roleDisplay(person) {
+  if (person.currentEmployer === 'current') return { text: 'CURRENT', cls: 'v', title: 'Role at this company is title-verified (current)' };
+  if (person.currentEmployer === 'official') return { text: 'OFFICIAL', cls: 'v', title: 'Current role stated by the company-owned source linked in this row' };
+  if (person.currentEmployer === 'snippet') return { text: 'SNIPPET', cls: 'est', title: 'Company seen in the search snippet, with no past-role markers' };
+  return { text: 'PAST?', cls: 'u', title: 'Contradictory signals — may be a past role, verify manually' };
+}
+
 // v1.4 lag fix: the table is expensive to rebuild — only re-render when the
 // underlying data actually changed (poll runs every 800 ms).
 let lastResultsKey = '';
@@ -297,7 +327,7 @@ function renderResults(force) {
     if (c.status === 'done') doneN++;
     peopleN += (c.people || []).length;
   }
-  const key = doneN + '|' + peopleN + '|' + (job.finishedAt || 0);
+  const key = doneN + '|' + peopleN + '|' + (job.finishedAt || 0) + '|' + (job.updatedAt || 0);
   if (!force && key === lastResultsKey) return;
   lastResultsKey = key;
 
@@ -313,15 +343,18 @@ function renderResults(force) {
     const tr = document.createElement('tr');
 
     if (r.kind === 'review') {
+      const review = reviewDisplay(r.comp);
       tr.appendChild(tdText('—', 'ds'));
-      tr.appendChild(tdText('No decision-makers found — needs manual review', 'ds'));
+      const reason = tdText(review.text, 'ds');
+      reason.title = review.title;
+      tr.appendChild(reason);
       tr.appendChild(tdText(r.comp.name || r.comp.input, 'co'));
       const tdL = document.createElement('td');
       if (r.comp.url) tdL.appendChild(linkEl(r.comp.url, 'page'));
       else tdL.appendChild(document.createTextNode('—'));
       tr.appendChild(tdL);
       const tdF = document.createElement('td');
-      tdF.appendChild(pillEl('u', 'REVIEW'));
+      tdF.appendChild(pillEl(review.cls, review.pill));
       tr.appendChild(tdF);
       frag.appendChild(tr);
       continue;
@@ -338,7 +371,7 @@ function renderResults(force) {
     if (p.email) {
       const mailDiv = document.createElement('div');
       mailDiv.className = 'est-mail';
-      mailDiv.title = 'estimated from company domain — unverified';
+      mailDiv.title = p.emailStatus || 'Email status unavailable';
       mailDiv.textContent = '✉ ' + p.email;
       tdD.appendChild(mailDiv);
     }
@@ -349,25 +382,20 @@ function renderResults(force) {
 
     const tdL = document.createElement('td');
     if (p.url) tdL.appendChild(linkEl(p.url, 'profile'));
+    else if (p.evidenceUrl) tdL.appendChild(linkEl(p.evidenceUrl, 'source'));
     else tdL.appendChild(document.createTextNode('—'));
     tr.appendChild(tdL);
 
     const tdF = document.createElement('td');
     tdF.appendChild(pillEl('p' + (p.pri || 5), p.priority || 'P5'));
     tdF.appendChild(document.createTextNode(' '));
-    tdF.appendChild(pillEl(p.urlVerified ? 'v' : 'u', p.urlVerified ? 'VERIFIED' : 'UNVERIFIED'));
+    const verify = verificationDisplay(p);
+    tdF.appendChild(pillEl(verify.cls, verify.text));
     if (p.currentEmployer) {
       tdF.appendChild(document.createTextNode(' '));
-      const roleCls = p.currentEmployer === 'current' ? 'v' :
-        (p.currentEmployer === 'snippet' ? 'est' : 'u');
-      const roleTxt = p.currentEmployer === 'current' ? 'CURRENT' :
-        (p.currentEmployer === 'snippet' ? 'SNIPPET' : 'PAST?');
-      const rolePill = pillEl(roleCls, roleTxt);
-      rolePill.title = p.currentEmployer === 'current'
-        ? 'Role at this company is title-verified (current)'
-        : p.currentEmployer === 'snippet'
-          ? 'Company seen in the search snippet, no past-role markers'
-          : 'Contradictory signals — may be a past role, verify manually';
+      const role = roleDisplay(p);
+      const rolePill = pillEl(role.cls, role.text);
+      rolePill.title = role.title;
       tdF.appendChild(rolePill);
     }
     tr.appendChild(tdF);
@@ -526,6 +554,9 @@ function filteredExportComps() {
         size: r.comp.size,
         hq: r.comp.hq,
         country: r.comp.country,
+        outcome: r.comp.outcome,
+        reviewReason: r.comp.reviewReason,
+        reviewDetail: r.comp.reviewDetail,
         people: r.kind === 'person' ? [r.p] : [],
         hasReview: r.kind !== 'person'
       });

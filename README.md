@@ -11,8 +11,8 @@ Runs in your browser · Bing-powered · works without any API key · free AI key
 
 [![Chrome MV3](https://img.shields.io/badge/Manifest-V3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/)
 [![Edge](https://img.shields.io/badge/Microsoft%20Edge-supported-0078D7?logo=microsoftedge&logoColor=white)](https://www.microsoft.com/edge)
-[![Version](https://img.shields.io/badge/version-1.5.0-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
-[![Tests](https://img.shields.io/badge/tests-50%20passing-34D399)](#-testing--quality)
+[![Version](https://img.shields.io/badge/version-1.6.0-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
+[![Tests](https://img.shields.io/badge/tests-56%20passing-34D399)](#-testing--quality)
 [![License](https://img.shields.io/badge/license-MIT-34D399)](LICENSE)
 [![Bing](https://img.shields.io/badge/search-Bing-008373)](https://www.bing.com)
 
@@ -127,7 +127,7 @@ Existing keys from older versions load automatically; their saved date is record
 | **Hunter.io** | [hunter.io](https://hunter.io) | verified emails (free tier ≈ 25 domain searches/month) |
 | **Custom** | your endpoint | any OpenAI-compatible API |
 
-No key at all? LeadScout still works: Bing extraction only, same TSV, fewer filled facts.
+No key at all? LeadScout still works from public Bing results and company-owned leadership pages, with the same TSV and fewer filled facts.
 
 ---
 
@@ -138,6 +138,7 @@ No key at all? LeadScout still works: Bing extraction only, same TSV, fewer fill
 |---|---|
 | **Bulk input** | Paste 50–100 companies at once — URLs, names, or mixed lines (`Postman - https://…`). Duplicates are removed. |
 | **3-tier name resolution** | Typed a name? LeadScout guesses the LinkedIn slug and verifies it by loading the page, then falls back to scored Bing results. A guess is never accepted unless the page name matches. |
+| **Source-aware recovery** | If Bing does not index a usable LinkedIn profile, LeadScout can use an explicit current leadership statement from the company's own website. It labels that row **Official**, links the evidence, and never invents a profile URL. |
 | **Per-company isolation** | Each company gets its own search corpus and AI call. The classic bulk-research bug — Company A's CEO appearing under Company B — is structurally prevented. |
 | **Deep page scan** | Reads LinkedIn's `/about/` page for industry, company size, HQ and website, with retries for slow rendering and a guest-mode fallback. |
 | **3 scan depths** | Quick (1 search), Standard (2), Deep (4) — roughly 10 s to 40 s per company. |
@@ -165,7 +166,7 @@ No second Apollo extension is required. If you already have Apollo, keep it — 
 | Feature | What it means for you |
 |---|---|
 | **One-click TSV** | Copies the full 14-column table; paste straight into Excel. |
-| **14 columns** | Name · Designation · Country · Company Name · Company Size · Industry · LinkedIn URL · Email · Email Status · Role Currency · Priority · Verification · HQ · Company Page |
+| **14 columns** | Name · Designation · Country · Company Name · Company Size · Industry · LinkedIn URL · Email · Email Status · Role Currency · Priority · Verification · HQ · Company Page. |
 | **Core 7-column mode** | Exactly the classic research template: Name, Designation, Country, Company, Size, Industry, LinkedIn URL. |
 | **Filter-aware export** | Filter to C-Suite or Verified-only, then copy exactly that. |
 | **TSV / CSV download** | CSV includes a UTF-8 BOM so “José García” opens correctly in Excel. |
@@ -173,7 +174,8 @@ No second Apollo extension is required. If you already have Apollo, keep it — 
 ### 🎛 Queue and comfort
 - Live progress, people/verified/company counts and ETA.
 - Pause / Resume / Stop / **Retry failed** / **Refresh all**.
-- Bing captcha? LeadScout pauses, notifies you, and resumes after you solve it.
+- Bing captcha or consent screen? LeadScout pauses, notifies you, and resumes after you complete it yourself.
+- Empty results now say whether Bing returned no profiles, candidates failed the current-role/company checks, or search parsing was blocked — rather than silently calling every case manual review.
 - Chrome/Edge kills the background worker? The queue resumes automatically, and a health banner tells you if a reload is needed.
 - Dark and light themes; full-page results view with filters.
 
@@ -184,6 +186,7 @@ No second Apollo extension is required. If you already have Apollo, keep it — 
 | Label | Meaning |
 |---|---|
 | 🟢 **Verified** | The LinkedIn URL came from a real search result or Gemini citation for that company — never constructed. |
+| 🟢 **Official** | A current name and role are stated on the company's own durable leadership/governance page; the results table links that evidence when no LinkedIn profile was indexed. |
 | 🟢 **CURRENT** | The role at this company is title-verified. |
 | 🟡 **SNIPPET** | The company appears in the snippet and there are no past-role markers. |
 | 🟡 **Unverified** | A real person from search results, but no pinned profile URL. |
@@ -249,7 +252,7 @@ Key invariants live in code: profile URLs from real results, AI names grounded i
 ## 🧪 Testing and quality
 
 ```bash
-node tools/test.mjs                  # 50 unit tests + ESM link check
+node tools/test.mjs                  # 56 deterministic checks + MV3/ESM smoke tests
 node tools/diag_linkcheck.mjs        # standalone import-graph check
 node tools/eval-evidence.mjs         # evidence-verifier smoke test
 node tools/live-eval-evidence.mjs --offline   # 11-claim comparison
@@ -269,7 +272,9 @@ The suite covers input parsing, Bing redirect decoding, title extraction, compan
 | “Bing needs human verification” | Open any Bing tab, solve the check, click **Resume** |
 | LinkedIn facts empty | Stay logged into LinkedIn; keep **Read LinkedIn pages** on |
 | “model not found” | Settings → AI models → set the provider's current model id |
-| A company needs manual review | Too few public results — try **Deep** mode or paste the exact LinkedIn URL |
+| **No profiles** / **Review** | Bing returned no matching profiles or the candidates did not pass company/current-role checks. Hover the reason for query and rejection counts; try **Deep** mode or paste the exact LinkedIn URL. |
+| **Search blocked** | Open the LeadScout Bing tab, complete Bing's consent or human-verification screen yourself, then click **Resume**. |
+| **Search error** | Reload the extension from `chrome://extensions` / `edge://extensions`, then retry the affected company. |
 
 ---
 
@@ -277,6 +282,7 @@ The suite covers input parsing, Bing redirect decoding, title extraction, compan
 
 | Version | Highlights |
 |---|---|
+| **1.6.0** | Fixed Bing profile-anchor extraction when generic results are present; decodes Bing-wrapped profile links; source-aware company-site leadership fallback; persisted candidate diagnostics and honest blocked/error/no-profile states; Chrome 116-compatible alarm recovery. |
 | **1.5.0** | **Persistent API key vault** with saved/expiry dates, per-key save/clear, show/hide, test-and-record; expiry warning banner; Microsoft Edge/Bing compatibility pass; store-safe manifest; custom-endpoint key fixed |
 | **1.4.1** | Service-worker recovery (no more “status code 15” dead-end), Gemini model-id override, AI corpus-grounding gate, evidence verifier + evaluation runner |
 | **1.4.0** | Scheme-guarded links, render dirty-checks, worker-tab cleanup, **⟳ Refresh all**, AI model overrides, Hunter pattern fix |

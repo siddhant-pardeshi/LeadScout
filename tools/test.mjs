@@ -4,10 +4,12 @@ import {
   parseInputs, slugFromUrl, titleCaseSlug, decodeBingUrl, parseProfileTitle,
   linkedinHandle, companyMatch, companyMatchPartial, domainFromWebsite, emailFor,
   buildTSV, buildCSV, extractSizeFromText, overlapTokens, kebabName, slugScore,
-  looseResolveMatch, roleCurrency, matchHunterEmail, cell, nameEvidence
+  looseResolveMatch, roleCurrency, matchHunterEmail, cell, exportCell, nameEvidence,
+  officialLeadershipCandidate
 } from '../lib/parse.js';
 import { classifyDesignation, seniorityBonus } from '../lib/rank.js';
 import { extractJson, assertSafeUrl } from '../lib/ai.js';
+import { extractBingResults } from '../lib/extract.js';
 import {
   KEY_PROVIDERS, emptyKeyMeta, normalizeKeyMeta, isDateStr, localDateStr,
   daysLeft, keyStatus, fmtDate, maskKey
@@ -114,6 +116,59 @@ T('decodeBingUrl: ck/a redirect + passthrough', () => {
   assert.equal(decodeBingUrl('https://www.linkedin.com/in/direct/'), 'https://www.linkedin.com/in/direct/');
 });
 
+T('extractBingResults: profile anchors survive generic-result-heavy Bing markup', () => {
+  const profileUrl = 'https://www.linkedin.com/in/asha-shah-123/';
+  const wrappedProfileUrl = 'https://www.bing.com/ck/a?u=a1' + Buffer.from(profileUrl).toString('base64url');
+  const genericCard = (n) => ({
+    querySelector(selector) {
+      if (selector === 'h2 a' || selector === 'a[href]') {
+        return { innerText: 'Generic result ' + n, href: 'https://example.com/' + n };
+      }
+      if (selector.indexOf('b_caption') !== -1 || selector === 'p') return { innerText: 'Generic result text' };
+      return null;
+    }
+  });
+  let profileCard;
+  const profileAnchor = {
+    href: wrappedProfileUrl,
+    innerText: 'Asha Shah - Chief Technology Officer - Acme Corp | LinkedIn',
+    closest() { return profileCard; },
+    parentElement: null
+  };
+  profileCard = {
+    innerText: 'Asha Shah - Chief Technology Officer - Acme Corp | LinkedIn',
+    querySelector(selector) {
+      if (selector === 'h2 a' || selector === 'h2') return profileAnchor;
+      return null;
+    }
+  };
+  const fakeDocument = {
+    title: 'Bing results',
+    body: { innerText: 'Search results', innerHTML: '' },
+    querySelector(selector) { return selector === '#b_results' ? {} : null; },
+    querySelectorAll(selector) {
+      if (selector === '#b_results li.b_algo') return [genericCard(1), genericCard(2), genericCard(3)];
+      if (selector === 'a[href]') return [profileAnchor];
+      return [];
+    }
+  };
+  const hadDocument = Object.prototype.hasOwnProperty.call(globalThis, 'document');
+  const oldDocument = globalThis.document;
+  const hadLocation = Object.prototype.hasOwnProperty.call(globalThis, 'location');
+  const oldLocation = globalThis.location;
+  globalThis.document = fakeDocument;
+  globalThis.location = { href: 'https://www.bing.com/search?q=acme' };
+  try {
+    const out = extractBingResults();
+    assert.equal(out.standardResultCount, 3);
+    assert.equal(out.profileResultCount, 1);
+    assert.ok(out.results.some(result => result.url === profileUrl));
+  } finally {
+    if (hadDocument) globalThis.document = oldDocument; else delete globalThis.document;
+    if (hadLocation) globalThis.location = oldLocation; else delete globalThis.location;
+  }
+});
+
 // ---------------- company matching (anti-bleed) ----------------
 T('companyMatch: matches tokens, ignores filler', () => {
   assert.equal(companyMatch('CTO at Acme Corp Ltd | LinkedIn', 'Acme Corp'), true);
@@ -196,6 +251,49 @@ T('emailFor patterns + flag', () => {
   assert.equal(emailFor('Jane', null), null);
 });
 
+T('official leadership source: accepts explicit current role only on company domain', () => {
+  const lead = officialLeadershipCandidate({
+    title: 'Asha Shah - Chief Technology Officer - Acme Corp leadership team',
+    snippet: 'Meet the Acme leadership team.',
+    url: 'https://www.acme.example/leadership'
+  }, 'https://acme.example', 'Acme Corp');
+  assert.ok(lead);
+  assert.equal(lead.name, 'Asha Shah');
+  assert.equal(lead.designation, 'Chief Technology Officer');
+  assert.equal(lead.evidenceUrl, 'https://www.acme.example/leadership');
+  assert.equal(officialLeadershipCandidate({
+    title: 'Asha Shah - Former Chief Technology Officer - Acme Corp',
+    snippet: '', url: 'https://acme.example/news'
+  }, 'https://acme.example', 'Acme Corp'), null);
+  assert.equal(officialLeadershipCandidate({
+    title: 'Asha Shah - Chief Technology Officer - Acme Corp',
+    snippet: 'Acme Corp leadership team', url: 'https://lookalike.example/leadership'
+  }, 'https://acme.example', 'Acme Corp'), null);
+  assert.equal(officialLeadershipCandidate({
+    title: 'Asha Shah - Chief Technology Officer - Acme Corp',
+    snippet: 'Acme Corp announced this appointment in 2018.',
+    url: 'https://acme.example/news/asha-shah-appointment'
+  }, 'https://acme.example', 'Acme Corp'), null);
+  assert.equal(officialLeadershipCandidate({
+    title: 'Asha Shah - Chief Technology Officer - Acme Corp leadership team',
+    snippet: 'Acme Corp leadership team',
+    url: 'https://acme.example/press-releases/2018/asha-shah'
+  }, 'https://acme.example', 'Acme Corp'), null);
+  assert.equal(officialLeadershipCandidate({
+    title: 'Bina Lee - Chief Technology Officer - Beta Division leadership team',
+    snippet: 'Beta Division leadership team', url: 'https://acme.example/leadership'
+  }, 'https://acme.example', 'Acme Corp'), null);
+  assert.equal(officialLeadershipCandidate({
+    title: 'Asha Shah - Chief Technology Officer - Acme Corp leadership team',
+    snippet: '', url: 'ftp://acme.example/leadership'
+  }, 'https://acme.example', 'Acme Corp'), null);
+  const legalVariant = officialLeadershipCandidate({
+    title: 'Asha Shah - Chief Technology Officer - Godrej Industries leadership team',
+    snippet: 'Godrej Industries leadership team', url: 'https://godrej.example/leadership'
+  }, 'https://godrej.example', 'Godrej Industries Group');
+  assert.equal(legalVariant.name, 'Asha Shah');
+});
+
 // ---------------- AI JSON plumbing ----------------
 T('extractJson from noisy reply', () => {
   const txt = 'Here you go:\n```json\n{"company":{"industry":"IT"},"people":[{"name":"A"}]}\n```';
@@ -217,6 +315,13 @@ T('assertSafeUrl rejects private/localhost, allows https', () => {
 // ---------------- exports ----------------
 T('cell strips tabs/newlines', () => {
   assert.equal(cell('A\tB\nC'), 'A B C');
+});
+
+T('cell prevents spreadsheet formula injection', () => {
+  assert.equal(cell('=HYPERLINK("https://bad.example")'), '=HYPERLINK("https://bad.example")');
+  assert.equal(exportCell('=HYPERLINK("https://bad.example")'), "'=HYPERLINK(\"https://bad.example\")");
+  assert.equal(exportCell('+SUM(1,1)'), "'+SUM(1,1)");
+  assert.equal(exportCell('Plain text'), 'Plain text');
 });
 
 T('buildTSV: header + rows + review row + full columns', () => {
@@ -250,6 +355,36 @@ T('buildCSV quotes commas properly', () => {
   }];
   const csv = buildCSV(comps, { core: true });
   assert.ok(csv.includes('"Acme, Inc."'));
+});
+
+T('buildTSV applies spreadsheet formula protection at export time', () => {
+  const tsv = buildTSV([{
+    name: '=Danger Co', people: [{
+      name: '+Formula Person', designation: 'CTO', url: '', urlVerified: false,
+      pri: 1, score: 1, priority: 'P1'
+    }]
+  }], { core: true });
+  const row = tsv.split('\n')[1].split('\t');
+  assert.equal(row[0], "'+Formula Person");
+  assert.equal(row[3], "'=Danger Co");
+});
+
+T('buildTSV: full export carries official evidence without changing core URL semantics', () => {
+  const comps = [{
+    name: 'Acme Corp', website: 'https://acme.example', people: [{
+      name: 'Asha Shah', designation: 'Chief Technology Officer', url: '',
+      evidenceUrl: 'https://acme.example/leadership', sourceType: 'official',
+      verification: 'Official company source', currentEmployer: 'official',
+      pri: 1, score: 100, priority: 'P1'
+    }]
+  }];
+  const full = buildTSV(comps, { core: false });
+  assert.equal(full.split('\n')[0].split('\t').length, 14);
+  assert.match(full.split('\n')[0], /LinkedIn URL/);
+  assert.equal(full.split('\n')[1].split('\t')[6], '');
+  assert.match(full, /Official company source/);
+  const core = buildTSV(comps, { core: true });
+  assert.equal(core.split('\n')[1].split('\t')[6], '');
 });
 
 // ---- v1.3 role currency (latest designation, not past) ----
@@ -436,6 +571,61 @@ T('buildTSV v1.3: 14 columns incl. Role Currency + HQ', () => {
   const core = buildTSV(comps, { core: true });
   assert.equal(core.split('\n')[0].split('\t').length, 7); // user's original template
 });
+
+// ---- MV3 background smoke -------------------------------------------------
+// Runs the real module against a deliberately tiny Chrome API double. This
+// catches service-worker boot errors that pure-module imports cannot reach.
+await (async function backgroundSmoke() {
+  const name = 'MV3 background smoke: boot, alarm compatibility, ping';
+  const hadChrome = Object.prototype.hasOwnProperty.call(globalThis, 'chrome');
+  const oldChrome = globalThis.chrome;
+  let messageHandler = null;
+  let alarm = null;
+  globalThis.chrome = {
+    storage: { local: { get: async () => ({}), set: async () => {} } },
+    action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {} },
+    notifications: { create: async () => {} },
+    tabs: {
+      onActivated: { addListener: () => {} },
+      get: async () => { throw new Error('not used by smoke'); },
+      create: async () => ({ id: 1 }), update: async () => {}, remove: async () => {}
+    },
+    scripting: { executeScript: async () => [] },
+    alarms: {
+      create: (name, info) => { alarm = { name, ...info }; },
+      onAlarm: { addListener: () => {} }
+    },
+    runtime: {
+      onMessage: { addListener: (fn) => { messageHandler = fn; } },
+      onInstalled: { addListener: () => {} },
+      getManifest: () => ({ version: '1.6.0' }),
+      getPlatformInfo: () => {}
+    }
+  };
+  try {
+    const url = new URL('../background.js?smoke=' + Date.now(), import.meta.url).href;
+    await import(url);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(alarm && alarm.periodInMinutes, 1);
+    assert.equal(typeof messageHandler, 'function');
+    const response = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('ping did not respond')), 1000);
+      const keepAlive = messageHandler({ type: 'ping' }, {}, (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      });
+      assert.equal(keepAlive, true);
+    });
+    assert.deepEqual(response, { ok: true, version: '1.6.0' });
+    passed++;
+    console.log('  ok  ' + name);
+  } catch (e) {
+    failed++;
+    console.log('FAIL  ' + name + '  → ' + e.message);
+  } finally {
+    if (hadChrome) globalThis.chrome = oldChrome; else delete globalThis.chrome;
+  }
+})();
 
 // ---- v1.4.1 ESM link check (reproduces Chrome "status code: 15") ----
 // Plain node --check is parse-only and cannot see import-binding conflicts

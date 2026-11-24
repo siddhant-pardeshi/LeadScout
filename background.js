@@ -17,7 +17,7 @@ import {
   slugFromUrl, titleCaseSlug, decodeBingUrl, parseProfileTitle, linkedinHandle,
   isLinkedInProfile, companyMatch, companyMatchPartial, emailFor, domainFromWebsite,
   extractSizeFromText, overlapTokens, kebabName, slugScore, looseResolveMatch,
-  roleCurrency, matchHunterEmail, cell, nameEvidence
+  roleCurrency, matchHunterEmail, cell, nameEvidence, officialLeadershipCandidate
 } from './lib/parse.js';
 import { classifyDesignation, seniorityBonus } from './lib/rank.js';
 import { aiResearch, aiTestKey } from './lib/ai.js';
@@ -41,6 +41,7 @@ const S = {
 };
 
 function persist() {
+  S.job.updatedAt = Date.now();
   return chrome.storage.local.set({ job: S.job });
 }
 async function loadAll() {
@@ -124,12 +125,19 @@ async function bingSearch(query) {
   const url = 'https://' + host + '/search?q=' + encodeURIComponent(query) + '&count=30';
   const tabId = await ensureTab('bing', url);
   await waitForTabLoad(tabId, 22000);
+  const meta = {
+    query: query, state: 'ok', attempts: 0, resultCount: 0,
+    profileResultCount: 0, standardResultCount: 0
+  };
   let res = null;
+  let extractionErrors = 0;
   for (let attempt = 0; attempt < 3; attempt++) {
+    meta.attempts = attempt + 1;
     try {
       const frames = await chrome.scripting.executeScript({ target: { tabId }, func: extractBingResults });
       res = frames && frames[0] && frames[0].result;
     } catch (e) {
+      extractionErrors++;
       await sleep(1200);
       continue;
     }
@@ -141,20 +149,42 @@ async function bingSearch(query) {
     if (res && res.results && res.results.length) break;
     await sleep(1400); // late render — try once more
   }
-  if (!res) res = { results: [], captcha: false, noResults: false, title: '' };
+  if (!res) {
+    const err = new Error('Bing result extraction failed after ' + extractionErrors + ' attempts');
+    err.code = 'bing-extractor-error';
+    throw err;
+  }
   if (res.captcha) {
+    meta.state = 'captcha';
     S.job.paused = true;
     S.job.attention = 'Bing is asking for human verification. Open any Bing search tab, complete the check, then click Resume.';
     await persist();
     notify('ls-captcha', 'LeadScout paused', 'Bing needs human verification — complete it, then Resume in LeadScout.');
-    throw new Error('Bing captcha — queue paused');
+    const err = new Error('Bing captcha — queue paused');
+    err.code = 'bing-captcha';
+    throw err;
+  }
+  if (res.consent) {
+    meta.state = 'consent';
+    S.job.paused = true;
+    S.job.attention = 'Bing needs consent before search results can load. Open the LeadScout Bing tab, complete the consent screen, then click Resume.';
+    await persist();
+    notify('ls-consent', 'LeadScout paused', 'Bing needs consent before LeadScout can search. Complete it in the Bing tab, then Resume.');
+    const err = new Error('Bing consent required — queue paused');
+    err.code = 'bing-consent';
+    throw err;
   }
   const results = (res.results || []).map(r => ({ ...r, url: decodeBingUrl(r.url) }));
+  meta.resultCount = results.length;
+  meta.standardResultCount = Number(res.standardResultCount || 0);
+  meta.profileResultCount = results.filter(r => isLinkedInProfile(r.url)).length;
+  if (res.noResults) meta.state = 'no-results';
+  else if (!results.length) meta.state = 'no-readable-results';
   // v1.4: skip the trailing pacing delay when the queue stopped (no wasted lag)
   if (S.job.running && !S.job.paused) {
     await sleep(jitter(SETTINGS.bingDelayMs || 2200));
   }
-  return results;
+  return { results, meta };
 }
 
 async function readLinkedInCompany(slug) {
@@ -211,11 +241,29 @@ function buildQueries(item) {
   return q;
 }
 
+function buildOfficialLeadershipQueries(website) {
+  const domain = domainFromWebsite(website);
+  if (!domain) return [];
+  const seniorRoles = '"Chief Executive Officer" OR CEO OR CTO OR CIO OR "Managing Director" OR President OR Founder OR "Head of Engineering" OR "Head of Product"';
+  return [
+    'site:' + domain + ' (' + seniorRoles + ')',
+    'site:' + domain + ' (leadership OR "executive team" OR management OR "our people")'
+  ];
+}
+
 // ------------------------------------------------------ people assembly -----
 
 function peopleFromSerp(serp, companyName, allowPartial) {
   const out = [];
   const seen = new Set();
+  const stats = {
+    resultCount: (serp || []).length, profileResultCount: 0, parseableCount: 0,
+    acceptedCount: 0,
+    rejected: {
+      not_profile: 0, bad_profile_url: 0, directory_or_nonperson: 0,
+      duplicate: 0, unparseable_title: 0, wrong_company: 0, past_role: 0
+    }
+  };
   // Strict all-token match by default (anti-bleed). When a plain company name
   // could NOT be resolved to a LinkedIn page, the typed legal name won't appear
   // on profiles ("at Zoho" vs "Zoho Corporation") — fall back to partial
@@ -225,23 +273,29 @@ function peopleFromSerp(serp, companyName, allowPartial) {
     : (hay) => companyMatch(hay, companyName);
   for (const r of serp) {
     const url = r.url || '';
-    if (!isLinkedInProfile(url)) continue;
+    if (!isLinkedInProfile(url)) { stats.rejected.not_profile++; continue; }
+    stats.profileResultCount++;
     const handle = linkedinHandle(url);
-    if (!handle || seen.has(handle)) continue;
+    if (!handle) { stats.rejected.bad_profile_url++; continue; }
     const parsed = parseProfileTitle(r.title);
-    if (!parsed || !parsed.name) continue;
+    // v1.4 precision: LinkedIn directory/collection handles are not people
+    if (/^dir(\/|-|$)/i.test(handle) || /^(topic|groups?|pulse)\b/i.test(handle)) {
+      stats.rejected.directory_or_nonperson++;
+      continue;
+    }
+    if (seen.has(handle)) { stats.rejected.duplicate++; continue; }
+    if (!parsed || !parsed.name) { stats.rejected.unparseable_title++; continue; }
+    stats.parseableCount++;
     const titleHay = r.title || '';
     const snippetHay = r.snippet || '';
-    // v1.4 precision: LinkedIn directory/collection handles are not people
-    if (/^dir(\/|-|$)/i.test(handle) || /^(topic|groups?|pulse)\b/i.test(handle)) continue;
     const inTitle = match(titleHay, companyName);
     const inSnippet = match(snippetHay, companyName);
-    if (!inTitle && !inSnippet) continue;
+    if (!inTitle && !inSnippet) { stats.rejected.wrong_company++; continue; }
     // v1.3 role currency: keep only CURRENT roles at this company.
     // Title mentions are the indexed headline (current); snippet-only mentions
     // that carry past-role markers BEFORE the company name are dropped.
     const role = roleCurrency(inTitle, inSnippet, titleHay, snippetHay, companyName);
-    if (role === 'past') continue;
+    if (role === 'past') { stats.rejected.past_role++; continue; }
     seen.add(handle);
     const cls = classifyDesignation(parsed.designation);
     const confidence = role === 'current' ? 0.85 : (role === 'snippet' ? 0.55 : 0.45);
@@ -255,8 +309,126 @@ function peopleFromSerp(serp, companyName, allowPartial) {
       confidence: confidence,
       cat: cls.cat, pri: cls.pri, score: cls.sc
     });
+    stats.acceptedCount++;
   }
-  return out;
+  return { people: out, stats };
+}
+
+function peopleFromOfficialSources(serp, website, companyName) {
+  const out = [];
+  const seen = new Set();
+  const stats = {
+    resultCount: (serp || []).length, acceptedCount: 0,
+    rejected: { no_explicit_current_leader: 0, duplicate: 0 }
+  };
+  for (const r of (serp || [])) {
+    const candidate = officialLeadershipCandidate(r, website, companyName);
+    if (!candidate) { stats.rejected.no_explicit_current_leader++; continue; }
+    const key = candidate.name.toLowerCase();
+    if (seen.has(key)) { stats.rejected.duplicate++; continue; }
+    seen.add(key);
+    const cls = classifyDesignation(candidate.designation);
+    out.push({
+      name: candidate.name,
+      designation: candidate.designation,
+      url: '', handle: null, urlVerified: false,
+      evidenceUrl: candidate.evidenceUrl,
+      evidenceText: candidate.evidenceText,
+      sourceType: 'official', source: 'official',
+      verification: 'Official company source',
+      currentEmployer: 'official', confidence: 0.8,
+      cat: cls.cat, pri: cls.pri, score: cls.sc
+    });
+    stats.acceptedCount++;
+  }
+  return { people: out, stats };
+}
+
+function mergeEvidencePeople(base, additional) {
+  for (const p of (additional || [])) {
+    const existing = base.find(b =>
+      (p.handle && b.handle === p.handle) ||
+      (b.name || '').toLowerCase() === (p.name || '').toLowerCase());
+    if (existing) {
+      // A LinkedIn profile remains the preferred link, but keep the official
+      // evidence URL as a second proof point when it exists.
+      if (!existing.evidenceUrl && p.evidenceUrl) existing.evidenceUrl = p.evidenceUrl;
+      continue;
+    }
+    base.push(p);
+  }
+  return base;
+}
+
+function makeDiscovery() {
+  return {
+    queryCount: 0, rawResultCount: 0, profileResultCount: 0,
+    parseableCount: 0, acceptedCount: 0,
+    rejected: {
+      bad_profile_url: 0, directory_or_nonperson: 0, duplicate: 0,
+      unparseable_title: 0, wrong_company: 0, past_role: 0,
+      no_explicit_current_leader: 0
+    },
+    sourceStates: {}, fallbackUsed: false, officialFallbackUsed: false
+  };
+}
+
+function recordSearch(discovery, meta) {
+  if (!meta) return;
+  discovery.queryCount++;
+  discovery.rawResultCount += Number(meta.resultCount || 0);
+  discovery.profileResultCount += Number(meta.profileResultCount || 0);
+  const state = meta.state || 'ok';
+  discovery.sourceStates[state] = (discovery.sourceStates[state] || 0) + 1;
+}
+
+function applyCandidateStats(discovery, stats) {
+  if (!stats) return;
+  discovery.parseableCount = Number(stats.parseableCount || 0);
+  discovery.acceptedCount = Number(stats.acceptedCount || 0);
+  for (const [reason, count] of Object.entries(stats.rejected || {})) {
+    if (reason === 'not_profile') continue;
+    discovery.rejected[reason] = Number(count || 0);
+  }
+}
+
+function buildReviewOutcome(comp) {
+  const d = comp.discovery || makeDiscovery();
+  const states = d.sourceStates || {};
+  const rejected = Object.values(d.rejected || {}).reduce((sum, n) => sum + Number(n || 0), 0);
+  const details = [
+    d.queryCount + ' queries', d.rawResultCount + ' readable results',
+    d.profileResultCount + ' profile results', rejected + ' rejected'
+  ].join(' · ');
+
+  if ((comp.people || []).length) {
+    comp.outcome = 'people_found';
+    comp.reviewReason = '';
+    comp.reviewDetail = details;
+  } else if (states.captcha || states.consent || states['bing-captcha'] || states['bing-consent']) {
+    comp.outcome = 'search_blocked';
+    comp.reviewReason = (states.captcha || states['bing-captcha'])
+      ? 'Search blocked by Bing verification' : 'Bing consent is required';
+    comp.reviewDetail = details;
+  } else if (states['extractor-error'] || states['bing-extractor-error']) {
+    comp.outcome = 'search_error';
+    comp.reviewReason = 'Search results could not be read';
+    comp.reviewDetail = details;
+  } else if (!d.profileResultCount) {
+    comp.outcome = 'no_profile_results';
+    comp.reviewReason = d.officialFallbackUsed
+      ? 'No matching LinkedIn profiles or company leadership evidence was found'
+      : 'No matching LinkedIn profiles were returned by Bing';
+    comp.reviewDetail = details;
+  } else if (!d.acceptedCount && rejected) {
+    comp.outcome = 'candidates_rejected';
+    comp.reviewReason = 'Profile candidates did not pass company/current-role checks';
+    comp.reviewDetail = details;
+  } else {
+    comp.outcome = 'no_public_match';
+    comp.reviewReason = 'No evidence-backed decision-maker was found';
+    comp.reviewDetail = details;
+  }
 }
 
 function mergeAiPeople(base, aiPeople, serp, companyName) {
@@ -416,7 +588,7 @@ async function researchCompany(item, idx) {
     comp = S.job.results[existingIdx];
     comp.status = 'working';
     comp.error = '';
-    if (!comp.people) comp.people = [];
+    comp.people = [];
   } else {
     comp = {
       id: item.id,
@@ -428,13 +600,33 @@ async function researchCompany(item, idx) {
       industry: '', size: '', hq: '', website: '', country: '',
       factSource: 'none',
       aiDropped: 0,
-      people: [], status: 'working', error: '', finishedAt: null
+      people: [], status: 'working', error: '', finishedAt: null,
+      discovery: makeDiscovery(), outcome: '', reviewReason: '', reviewDetail: ''
     };
     S.job.results.push(comp);
   }
+  comp.discovery = makeDiscovery();
+  comp.outcome = '';
+  comp.reviewReason = '';
+  comp.reviewDetail = '';
   await persist();
 
   const companyName = () => comp.name || item.name || titleCaseSlug(item.slug) || '';
+  const search = async (query) => {
+    try {
+      const out = await bingSearch(query);
+      recordSearch(comp.discovery, out.meta);
+      return out.results;
+    } catch (e) {
+      const code = String(e && e.code || 'bing-extractor-error');
+      comp.discovery.sourceStates[code] = (comp.discovery.sourceStates[code] || 0) + 1;
+      comp.error = String(e && e.message || e).slice(0, 200);
+      comp.status = 'failed';
+      buildReviewOutcome(comp);
+      await persist();
+      throw e;
+    }
+  };
 
   // ---- 1. resolve slug for plain names (3-tier, recall-first) ---------------
   let preScan = null;
@@ -460,12 +652,12 @@ async function researchCompany(item, idx) {
           candidates.push({ slug: slug, score: loose * 10 + slugScore(slug, comp.name) });
         }
       };
-      collect(await bingSearch('"' + stripQuotes(comp.name) + '" site:linkedin.com/company'));
+      collect(await search('"' + stripQuotes(comp.name) + '" site:linkedin.com/company'));
       if (!candidates.length) {
-        collect(await bingSearch(stripQuotes(comp.name) + ' site:linkedin.com/company'));
+        collect(await search(stripQuotes(comp.name) + ' site:linkedin.com/company'));
       }
       if (!candidates.length) {
-        collect(await bingSearch(comp.name + ' linkedin company page'));
+        collect(await search(comp.name + ' linkedin company page'));
       }
       if (candidates.length) {
         candidates.sort((a, b) => b.score - a.score); // stable — ties keep SERP order
@@ -500,18 +692,45 @@ async function researchCompany(item, idx) {
   const allowPartial = (item.type === 'name' && !comp.slug);
   const queries = buildQueries({ type: item.type, name: companyName(), slug: item.slug });
   for (const q of queries) {
-    const res = await bingSearch(q);
+    const res = await search(q);
     serp = serp.concat(res);
     if (S.job.paused) throw new Error('paused');
   }
 
-  // low yield → one extra broad query (skip in deep mode which already has it)
-  const profileCount = serp.filter(r => isLinkedInProfile(r.url)).length;
-  if (profileCount < 2 && (SETTINGS.scanMode || 'standard') !== 'deep') {
-    const extra = await bingSearch('site:linkedin.com/in "' + stripQuotes(companyName()) +
+  // Measure usable candidates before deciding whether recovery is needed. Raw
+  // result/profile counts are not enough: a page full of wrong-company or past
+  // profiles used to suppress this fallback and yield an unexplained empty row.
+  let profilePass = peopleFromSerp(serp, companyName(), allowPartial);
+  applyCandidateStats(comp.discovery, profilePass.stats);
+  if (profilePass.people.length < 2 && (SETTINGS.scanMode || 'standard') !== 'deep') {
+    comp.discovery.fallbackUsed = true;
+    const extra = await search('site:linkedin.com/in "' + stripQuotes(companyName()) +
       '" ("AI" OR "Machine Learning" OR "Digital" OR "Innovation" OR "Engineering")');
     serp = serp.concat(extra);
+    profilePass = peopleFromSerp(serp, companyName(), allowPartial);
+    applyCandidateStats(comp.discovery, profilePass.stats);
   }
+
+  // LinkedIn profiles are not consistently indexed by Bing. If the company
+  // page supplied a website, make a bounded pass over that company's own
+  // durable leadership/governance pages. Only explicit current name + role statements
+  // from the corporate domain are accepted, and no profile URL is invented.
+  let officialPass = { people: [], stats: null };
+  if (profilePass.people.length < 2) {
+    const officialQueries = buildOfficialLeadershipQueries(comp.website);
+    if (officialQueries.length) {
+      comp.discovery.officialFallbackUsed = true;
+      let officialSerp = [];
+      for (const q of officialQueries) officialSerp = officialSerp.concat(await search(q));
+      officialPass = peopleFromOfficialSources(officialSerp, comp.website, companyName());
+      comp.discovery.rejected.no_explicit_current_leader = Number(
+        officialPass.stats && officialPass.stats.rejected &&
+        officialPass.stats.rejected.no_explicit_current_leader || 0);
+    }
+  }
+  const basePeople = mergeEvidencePeople(profilePass.people, officialPass.people);
+  comp.discovery.acceptedCount = profilePass.stats.acceptedCount +
+    Number(officialPass.stats && officialPass.stats.acceptedCount || 0);
 
   // ---- 4. AI enrichment ----------------------------------------------------
   let aiNote = '';
@@ -522,7 +741,7 @@ async function researchCompany(item, idx) {
   // Grounded research helps twice: when people are scarce AND when the
   // LinkedIn page was walled and company facts are still missing (RC7).
   const groundedCandidate = prov === 'gemini' && hasKey &&
-    (serp.filter(r => isLinkedInProfile(r.url)).length < 2 || comp.factSource === 'none');
+    (basePeople.length < 2 || comp.factSource === 'none');
   if (SETTINGS.aiAssist !== false && prov !== 'none' && hasKey) {
     try {
       const out = await aiResearch({
@@ -535,7 +754,7 @@ async function researchCompany(item, idx) {
       // grounded citations are real URLs — add them to the corpus before merging
       const extraSerp = (out.cites || []).map(c => ({ title: c.title, url: c.url, snippet: 'AI grounding citation' }));
       serp = serp.concat(extraSerp);
-      const merged = mergeAiPeople(peopleFromSerp(serp, companyName(), allowPartial), out.people, serp, companyName());
+      const merged = mergeAiPeople(basePeople, out.people, serp, companyName());
       comp.people = merged.people;
       comp.aiDropped = merged.dropped;
       // facts: never overwrite LinkedIn-verified facts; fill gaps only
@@ -550,10 +769,10 @@ async function researchCompany(item, idx) {
         (merged.dropped ? ' · ' + merged.dropped + ' AI name(s) dropped — no corpus evidence' : '');
     } catch (e) {
       aiNote = 'ai-failed: ' + String(e.message || e).slice(0, 120);
-      comp.people = peopleFromSerp(serp, companyName(), allowPartial);
+      comp.people = basePeople;
     }
   } else {
-    comp.people = peopleFromSerp(serp, companyName(), allowPartial);
+    comp.people = basePeople;
   }
 
   // ---- 5. finalize ---------------------------------------------------------
@@ -580,6 +799,7 @@ async function researchCompany(item, idx) {
   }
   comp.people = finalizePeople(comp.people, domain, SETTINGS.includeEmails !== false, hunterData);
   comp.aiNote = aiNote;
+  buildReviewOutcome(comp);
   comp.status = 'done';
   comp.finishedAt = Date.now();
   S.job.doneCount += 1;
@@ -611,6 +831,19 @@ async function pump() {
           if (S.runId !== myRun) break;
           item.status = 'failed';
           item.error = String(e.message || e).slice(0, 200);
+          const comp = S.job.results.find(c =>
+            (item.slug && c.slug === item.slug) || c.input === item.input);
+          if (comp) {
+            const alreadyRecorded = comp.status === 'failed' && comp.error === item.error;
+            comp.status = 'failed';
+            comp.error = item.error;
+            if (!comp.discovery) comp.discovery = makeDiscovery();
+            if (!alreadyRecorded) {
+              const code = String(e && e.code || (S.job.paused ? 'paused' : 'research-error'));
+              comp.discovery.sourceStates[code] = (comp.discovery.sourceStates[code] || 0) + 1;
+            }
+            buildReviewOutcome(comp);
+          }
         }
         S.job.cursor++;
         await persist();
@@ -620,7 +853,7 @@ async function pump() {
         S.job.cursor++; // skip already-done/failed items on resume
       }
     }
-    if (S.runId === myRun && S.job.running && S.job.cursor >= S.job.queue.length) {
+    if (S.runId === myRun && S.job.running && !S.job.paused && S.job.cursor >= S.job.queue.length) {
       S.job.running = false;
       S.job.finishedAt = Date.now();
       const done = S.job.queue.filter(q => q.status === 'done').length;
@@ -707,6 +940,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             q.error = '';
           }
         }
+        // A paused company is marked failed and the pump has already advanced
+        // its cursor. Rewind to the first queued item so Resume cannot skip
+        // that company and finish with a permanently stale review row.
+        const firstQueued = S.job.queue.findIndex(q => q.status === 'queued');
+        if (firstQueued !== -1) S.job.cursor = firstQueued;
         await persist();
         startHeartbeat();
         pump();
@@ -789,7 +1027,10 @@ chrome.tabs.onActivated.addListener((info) => {
   try { S.lastActiveTab = info.tabId; } catch (e) { /* ignore */ }
 });
 
-chrome.alarms.create('ls-pump', { periodInMinutes: 0.5 });
+// Chrome 116–119 require alarm periods of at least one minute. Keep the
+// documented Chrome 116+ support truthful; active queues are also driven by
+// the in-memory pump, so this only affects restart recovery cadence.
+chrome.alarms.create('ls-pump', { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === 'ls-pump' && S.job.running && !S.job.paused) pump();
 });
