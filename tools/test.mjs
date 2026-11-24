@@ -745,6 +745,48 @@ T('buildTSV: CRM LinkedIn field rejects a company page', () => {
   assert.equal(tsv.split('\n')[1].split('\t')[9], '');
 });
 
+T('buildTSV: a possibly-past role never becomes a CRM current-role row', () => {
+  const comp = {
+    name: 'Acme Corp',
+    people: [
+      { name: 'Jane Doe', designation: 'CEO', url: '', currentEmployer: 'current' },
+      { name: 'Old Hand', designation: 'CEO', url: '', currentEmployer: 'review-past' }
+    ]
+  };
+  const crm = buildTSV([comp]).trim().split('\n');
+  assert.equal(crm.length, 2, 'only the accepted current person is exported');
+  assert.equal(crm[1].split('\t')[0], 'Jane');
+  const audit = buildTSV([comp], { format: 'audit' }).trim().split('\n');
+  assert.equal(audit.length, 3, 'the audit format still carries both people');
+});
+
+T('buildTSV: CRM LinkedIn rejects a bare /in/ and strips tracking params', () => {
+  const rows = buildTSV([{
+    name: 'Acme Corp',
+    people: [
+      { name: 'Jane Doe', designation: 'CTO', url: 'https://www.linkedin.com/in/jane-doe/?trk=profile' },
+      { name: 'Bare Link', designation: 'CIO', url: 'https://www.linkedin.com/in/' }
+    ]
+  }]).replace(/\n$/, '').split('\n');
+  assert.equal(rows[1].split('\t')[9], 'https://www.linkedin.com/in/jane-doe/');
+  assert.equal(rows[2].split('\t')[9], '');
+});
+
+T('buildTSV/buildCSV: one row model, so tabs and newlines cannot shift columns', () => {
+  const comps = [{
+    name: 'Tab Co',
+    website: '',
+    people: [{ name: 'A B', designation: 'Head\tof\nSales', currentEmployer: 'current' }]
+  }];
+  const tsvRow = buildTSV(comps).replace(/\n$/, '').split('\n')[1];
+  assert.equal(tsvRow.split('\t').length, CRM_EXPORT_HEADERS.length);
+  const csv = buildCSV(comps);
+  assert.ok(csv.includes('Head of Sales'));
+  const csvRows = csv.replace(/\r\n$/, '').split('\r\n');
+  assert.equal(csvRows.length, 2);
+  assert.equal(csvRows[1].split(',').length, CRM_EXPORT_HEADERS.length);
+});
+
 T('buildCSV: CRM Unicode, quoting and formula safety', () => {
   const csv = buildCSV([{
     name: 'Acme, Inc.', people: [{

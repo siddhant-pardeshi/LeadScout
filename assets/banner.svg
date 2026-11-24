@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="LeadScout banner">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-labelledby="bannerTitle bannerDesc">
+  <title id="bannerTitle">LeadScout — evidence-backed decision-maker research for Chrome and Edge</title>
+  <desc id="bannerDesc">Dark title card: LeadScout, with badges for Chrome MV3, Bing-powered search, current roles only and a CRM-ready TSV export.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#0B0D17"/>
@@ -97,7 +99,7 @@
     <text x="620" y="192" text-anchor="middle" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
           font-size="25" font-weight="600" fill="#B9BFDB">Evidence-Backed Decision-Maker Research</text>
     <text x="620" y="222" text-anchor="middle" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
-          font-size="17" fill="#6F7794">for Google Chrome · powered by Bing · AI-optional · Excel-ready</text>
+          font-size="17" fill="#6F7794">for Chrome &amp; Edge · powered by Bing · AI-optional · Excel-ready</text>
 
     <!-- feature pills -->
     <g font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="15" font-weight="600">

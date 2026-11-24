@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" role="img" aria-label="Get started footer — install steps and feature ticker">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" role="img" aria-labelledby="ctaTitle ctaDesc">
+  <title id="ctaTitle">Get started with LeadScout in two minutes</title>
+  <desc id="ctaDesc">A terminal shows opening chrome://extensions, enabling developer mode, loading the unpacked extension and starting research, next to a three-step checklist and a feature ticker.</desc>
   <defs>
     <linearGradient id="fbg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#0B0D17"/>
@@ -94,14 +96,9 @@
     </rect>
     <text x="820" y="254" text-anchor="middle" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="16" font-weight="700" fill="#E9D5FF">⭐ Star the repo</text>
 
-    <!-- ── BOTTOM: infinite feature marquee ── -->
+    <!-- ── BOTTOM: feature strip (fitted, readable without motion) ── -->
     <rect x="0" y="300" width="1200" height="36" fill="#10131F"/>
-    <g clip-path="url(#fframe)">
-      <g font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="16" font-weight="700">
-        <animateTransform attributeName="transform" type="translate" values="0 0; -1400 0" dur="14s" repeatCount="indefinite"/>
-        <text x="20" y="324" fill="#8B93B8">50–100 companies per run <tspan fill="#C084FC">✦</tspan> current roles only <tspan fill="#34D399">✦</tspan> real LinkedIn profiles only <tspan fill="#C084FC">✦</tspan> honest email status <tspan fill="#34D399">✦</tspan> 10-column CRM export <tspan fill="#C084FC">✦</tspan> pause · resume · refresh <tspan fill="#34D399">✦</tspan> free AI keys <tspan fill="#C084FC">✦</tspan> </text>
-        <text x="1420" y="324" fill="#8B93B8">50–100 companies per run <tspan fill="#C084FC">✦</tspan> current roles only <tspan fill="#34D399">✦</tspan> real LinkedIn profiles only <tspan fill="#C084FC">✦</tspan> honest email status <tspan fill="#34D399">✦</tspan> 10-column CRM export <tspan fill="#C084FC">✦</tspan> pause · resume · refresh <tspan fill="#34D399">✦</tspan> free AI keys <tspan fill="#C084FC">✦</tspan> </text>
-      </g>
-    </g>
+    <line x1="0" y1="300" x2="1200" y2="300" stroke="#242B45" stroke-width="1"/>
+    <text x="600" y="323" text-anchor="middle" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="13.5" font-weight="700" fill="#9AA3C4">10-column CRM export <tspan fill="#C084FC">✦</tspan> current roles only <tspan fill="#34D399">✦</tspan> real LinkedIn profiles only <tspan fill="#C084FC">✦</tspan> honest email status <tspan fill="#34D399">✦</tspan> pause · resume · refresh <tspan fill="#C084FC">✦</tspan> free AI keys optional</text>
   </g>
 </svg>

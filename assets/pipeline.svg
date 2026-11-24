@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 280" width="1200" height="280" role="img" aria-label="LeadScout pipeline">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 240" width="1200" height="240" role="img" aria-labelledby="pipeTitle pipeDesc">
+  <title id="pipeTitle">How LeadScout works: list, search, company pages, enrichment, CRM export</title>
+  <desc id="pipeDesc">Five connected steps: your list of 50 to 100 inputs, a Bing search, LinkedIn and company pages, optional AI enrichment, and a one-click ten-column CRM TSV export.</desc>
   <defs>
     <linearGradient id="pbg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#0B0D17"/>
@@ -7,11 +9,12 @@
     <filter id="pblur" x="-60%" y="-60%" width="220%" height="220%">
       <feGaussianBlur stdDeviation="10"/>
     </filter>
-    <clipPath id="pframe"><rect width="1200" height="280" rx="24"/></clipPath>
+    <clipPath id="pframe"><rect width="1200" height="240" rx="24"/></clipPath>
   </defs>
 
   <g clip-path="url(#pframe)">
     <rect width="1200" height="280" fill="url(#pbg)"/>
+    <g transform="translate(0 -44)">
 
     <!-- flowing connector (under the cards) -->
     <path d="M128 122 L1072 122" stroke="#3A4162" stroke-width="3" stroke-dasharray="7 11" fill="none">
@@ -119,8 +122,9 @@
     </circle>
 
     <text x="600" y="228" text-anchor="middle" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
-          font-size="16" fill="#6F7794">each company is researched in complete isolation — names never bleed between companies</text>
+          font-size="16" fill="#A9B0CC">each company is researched in complete isolation — names never bleed between companies</text>
     <text x="600" y="254" text-anchor="middle" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
-          font-size="14.5" fill="#525A78">human-like pacing · captcha-aware · resumes automatically</text>
+          font-size="14.5" fill="#8A92AD">human-like pacing · captcha-aware · resumes automatically</text>
+    </g>
   </g>
 </svg>

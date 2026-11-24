@@ -12,8 +12,8 @@ A Chrome / Microsoft Edge extension for focused B2B lead research. Research 50�
 
 [![Chrome MV3](https://img.shields.io/badge/Manifest-V3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/)
 [![Edge](https://img.shields.io/badge/Microsoft%20Edge-supported-0078D7?logo=microsoftedge&logoColor=white)](https://www.microsoft.com/edge)
-[![Version](https://img.shields.io/badge/version-2.0.0-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
-[![Tests](https://img.shields.io/badge/tests-74%20passing-34D399)](#-testing--quality)
+[![Version](https://img.shields.io/badge/version-2.0.1-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
+[![Tests](https://img.shields.io/badge/tests-77%20passing-34D399)](#-testing--quality)
 [![License](https://img.shields.io/badge/license-MIT-34D399)](LICENSE)
 [![Bing](https://img.shields.io/badge/search-Bing-008373)](https://www.bing.com)
 
@@ -68,41 +68,35 @@ The primary **Copy CRM TSV**, **CRM .TSV**, and **CRM .CSV** actions always use 
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Evidence-backed first name | Remaining name tokens | Current role | Supported email or blank | Canonical company | Source-backed size | Source-backed country | Source-backed industry | Official website domain | Real person LinkedIn profile or blank |
 
+```
+PROSPECT_FIRST_NAME	PROSPECT_LAST_NAME	DESIGNATION	EMAIL_ID	COMPANY_NAME	COMPANY_SIZE	COUNTRY	INDUSTRY_TYPE	WEBSITE_NAME	LINKEDIN_URL
+```
+
 `WEBSITE_NAME` is the canonical company domain when LeadScout has a source-backed public site. `LINKEDIN_URL` is populated only with a real person profile (`/in/` or `/pub/`) — never a company page, evidence link, or generated URL. If no accepted person is found, LeadScout keeps the diagnostic in the results UI and exports no fabricated CRM prospect row.
 
 <div align="center">
 <img src="assets/columns.svg" alt="Animated preview of LeadScout's exact ten-column CRM export" width="100%">
+
+<sub>Animated previews are decorative. Each one stays readable as a static image, so the meaning survives if motion is off.</sub>
 </div>
 
 ---
 
 ## Install
 
-### Google Chrome
+### Three steps — Chrome or Edge
 
-1. Open `chrome://extensions`
-2. Turn on **Developer mode** (top-right)
-3. Click **Load unpacked** → select this folder
-4. Pin **LeadScout** from the puzzle-piece menu
+| Step | What to do |
+|---|---|
+| **1 · Load it** | Open `chrome://extensions` (Chrome) or `edge://extensions` (Edge) → turn on **Developer mode** → **Load unpacked** → pick this folder. |
+| **2 · Pin it** | Pin **LeadScout** from the puzzle-piece / extensions menu. Optional but recommended: stay logged into LinkedIn, and save a free Groq or Gemini key in ⚙ **Settings → 🔑 API keys**. |
+| **3 · Run it** | Paste companies → **▶ Start research** → **Copy CRM TSV** → paste into Excel or your CRM importer. |
 
-### Microsoft Edge (the browser where Bing is the default)
+Edge is Chromium-based, so the same folder runs unchanged — no separate package, no Chrome-only APIs.
 
-Edge is Chromium-based, so the same build runs unchanged — no separate package, no Chrome-only APIs.
+> "Bing browser" usually means Microsoft Edge with Bing as the search engine. Extensions are not supported in the Bing mobile app; install LeadScout in Edge on desktop.
 
-1. Open `edge://extensions`
-2. Turn on **Developer mode** (left sidebar)
-3. Click **Load unpacked** → select this folder
-4. Pin **LeadScout** from the extensions menu
-
-> “Bing browser” usually means Microsoft Edge with Bing as the search engine. Extensions are not supported in the Bing mobile app; install LeadScout in Edge on desktop.
-
-### After installing
-
-- Stay logged into LinkedIn in the same browser profile (the company-page facts are much better).
-- Optional: open ⚙ **Settings → 🔑 API keys** and save a free Groq/Gemini key.
-- Paste companies → **▶ Start research** → **Copy CRM TSV** → paste into Excel or your CRM importer.
-
-Standard mode takes about 15–25 seconds per company. The queue runs in the background worker, so you can close the popup and keep browsing.
+Standard mode takes about 15–25 seconds per company. The queue runs inside the extension's background worker, so you can close the popup and keep browsing.
 
 ---
 
@@ -278,13 +272,13 @@ Key invariants live in code: profile URLs from real results, AI names grounded i
 ## 🧪 Testing and quality
 
 ```bash
-node tools/test.mjs                  # 74 deterministic checks + MV3/ESM smoke tests
+node tools/test.mjs                  # 77 deterministic checks + MV3/ESM smoke tests
 node tools/diag_linkcheck.mjs        # standalone import-graph check
 node tools/eval-evidence.mjs         # evidence-verifier smoke test
 node tools/live-eval-evidence.mjs --offline   # 11-claim comparison
 ```
 
-The suite covers input parsing, Bing redirect decoding, title extraction, company matching, the 3-tier resolver, role-currency logic, the AI corpus-grounding gate, key/expiry math, Hunter matching and TSV/CSV builders.
+The suite covers input parsing, Bing redirect decoding, title extraction, company matching, the 3-tier resolver, role-currency logic, the AI corpus-grounding gate, key/expiry math, Hunter matching, CRM name parsing, and the TSV/CSV builders (one row model, formula safety, and no fabricated prospect rows).
 
 **Manual live smoke (24 Nov 2026, Edge 158, no API key):** Twilio → 7 official people; HubSpot → 9; Freshworks → 9; Lupin → 12; Redington → 8; Sun Pharma → 8; Welspun World → 4. Godrej Industries returned **Source blocked** (its site rejects automated access), Jio-bp had no readable leadership page, and a nonexistent company returned `no_profile_results`. Re-verify names and roles against the linked evidence before outreach.
 
@@ -320,6 +314,7 @@ The suite covers input parsing, Bing redirect decoding, title extraction, compan
 
 | Version | Highlights |
 |---|---|
+| **2.0.1** | Hardened the CRM contract: TSV and CSV now share one row model (a tab or newline in a scraped value can no longer shift columns), a possibly-past role is never exported as a current role, a bare `/in/` link is rejected and tracking parameters are stripped, and the folder artwork was rebuilt — the ten-column table no longer collides and the footer strip fits its frame. 77 deterministic checks. |
 | **2.0.0** | The default copy/download format is now an exact 10-column CRM contract: `PROSPECT_FIRST_NAME`, `PROSPECT_LAST_NAME`, `DESIGNATION`, `EMAIL_ID`, `COMPANY_NAME`, `COMPANY_SIZE`, `COUNTRY`, `INDUSTRY_TYPE`, `WEBSITE_NAME`, `LINKEDIN_URL`. Name splitting is tested; company domains stay source-backed; only real person-profile LinkedIn URLs are exported; review diagnostics never become fabricated CRM prospects. Added a bold GitHub-safe animated CRM export visual and a sharper project landing flow. |
 | **1.9.0** | Company facts from official pages (`companyFactsFromPage`: size, industry, HQ, country, LinkedIn URL) merged from leadership/about/investor pages — never overwriting LinkedIn-verified values; explicit **Company LinkedIn URL** column in the 16-column export plus a link arrow on every company cell; authwall "Join LinkedIn" title rejection; cinematic dark visual system (aurora, grid drift, gradient wordmark, card rise, button sheen, glowing progress) with a light theme and reduced-motion fallback; full-width fixed-layout tables (no clipped columns). Live-verified: Redington 4,025+ employees from its investor page. |
 | **1.8.0** | Indian/enterprise recovery: company-domain probing (`jiobp.com`, `sunpharma.com`), canonical redirects (`redington.group` → `redingtongroup.com`), `/about-us` + `/know-us` + board paths, homepage leadership cards, legal-name domain trust, authwall title guard; live-verified Lupin 12, Redington 8, Sun 8, Welspun 4. |
