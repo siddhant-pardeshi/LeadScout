@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LeadScout Workspace</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0A0B14" stroke-width="2.4" stroke-linecap="round">
+          <circle cx="10.5" cy="10.5" r="6.2"/><path d="M15.4 15.4 21 21"/>
+        </svg>
+      </span>
+      <div>
+        <h1>LeadScout Workspace</h1>
+        <p>10-column CRM table · nothing invented</p>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="btnExtract" class="btn primary" title="Read the page you are looking at">⌖ Extract current page</button>
+      <button id="btnResolve" class="btn" title="Search for missing LinkedIn profile URLs">↯ Resolve missing</button>
+      <button id="btnAdd" class="btn" title="Append an empty row">＋ Row</button>
+      <button id="btnCsv" class="btn" title="Download RFC-4180 CSV with UTF-8 BOM">⤓ CSV</button>
+      <button id="btnTsv" class="btn" title="Copy the table as TSV for Sheets or Excel">⧉ Copy TSV</button>
+      <button id="btnClear" class="btn danger" title="Click twice to clear every row">✕ Clear</button>
+    </div>
+  </header>
+
+  <div class="meta">
+    <span id="chipRows" class="chip">Rows <b>0</b></span>
+    <span id="chipMissing" class="chip">Missing LinkedIn <b>0</b></span>
+    <span id="chipSource" class="chip">Source <b>—</b></span>
+    <label class="search">
+      <input id="search" type="search" placeholder="Filter rows…" aria-label="Filter rows">
+    </label>
+  </div>
+
+  <div id="progress" class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+    <i id="progressBar"></i>
+  </div>
+
+  <div class="table-wrap" id="tableWrap">
+    <table id="table">
+      <thead>
+        <tr>
+          <th scope="col">PROSPECT_<wbr>FIRST_NAME</th>
+          <th scope="col">PROSPECT_<wbr>LAST_NAME</th>
+          <th scope="col">DESIGNATION</th>
+          <th scope="col">EMAIL_ID</th>
+          <th scope="col">COMPANY_NAME</th>
+          <th scope="col">COMPANY_SIZE</th>
+          <th scope="col">COUNTRY</th>
+          <th scope="col">INDUSTRY_TYPE</th>
+          <th scope="col">WEBSITE_NAME</th>
+          <th scope="col">LINKEDIN_URL</th>
+          <th scope="col"><span class="sr-only">Row actions</span></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div id="empty" class="empty">
+      <h2>No prospects yet</h2>
+      <p>Open a LinkedIn profile, a people-search page or a company team page and press
+        <b>Extract current page</b>. You can also select text on any page, right-click and choose
+        <b>Extract prospect to LeadScout</b>, or add a row by hand.</p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

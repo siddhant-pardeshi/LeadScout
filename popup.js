@@ -923,7 +923,21 @@ function wire() {
   $('setTheme').addEventListener('change', () => {
     document.documentElement.dataset.theme = $('setTheme').value;
   });
-  $('btnTheme').addEventListener('click', toggleTheme);
+  $('btnWorkspace').addEventListener('click', async () => {
+  try {
+    if (!chrome.sidePanel || !chrome.sidePanel.open) {
+      toast('This browser build has no side panel — use Edge or Chrome 114+.');
+      return;
+    }
+    const win = await chrome.windows.getCurrent();
+    await chrome.sidePanel.open({ windowId: win.id });
+    window.close();
+  } catch (e) {
+    toast('Could not open the workspace: ' + (e.message || e));
+  }
+});
+
+$('btnTheme').addEventListener('click', toggleTheme);
 
   $('settingsModal').addEventListener('click', (ev) => {
     const saveBtn = ev.target.closest('[data-key-save]');

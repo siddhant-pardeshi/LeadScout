@@ -48,11 +48,40 @@ PROSPECT_FIRST_NAME,PROSPECT_LAST_NAME,DESIGNATION,EMAIL_ID,COMPANY_NAME,COMPANY
 <img src="assets/columns.svg" alt="The ten CSV columns" width="100%">
 </div>
 
+## Workspace (side panel)
+
+Research a list of companies, or work the page you are already on. Both end in the same ten columns.
+
+Press the **▤** button in the popup header, or right-click any page and choose **Extract prospect to LeadScout**. The workspace opens as a Chrome/Edge side panel, so it stays visible while you browse.
+
+| Action | What it reads |
+|---|---|
+| **⌖ Extract current page** | A LinkedIn profile (`/in/`), a LinkedIn people-search or list page, or a company team/about page — including JSON-LD `Person`/`Organization`, team cards, `mailto:` links and `linkedin.com/in/` anchors |
+| **Right-click → Extract prospect** | Your text selection ("Asha Shah — CTO at Acme Corp", or name / role / company on separate lines), plus the page it came from |
+| **＋ Row** | An empty row you type into |
+| **↯ Resolve missing** | Fills only blank `LINKEDIN_URL` cells, one paced lookup at a time |
+
+The table itself:
+
+- Sticky header with the exact ten columns, every cell editable in place.
+- A **link icon** on `WEBSITE_NAME` and `LINKEDIN_URL`; both open in a new tab.
+- Dedupe by profile URL first, then email + name. Re-extracting the same page fills blanks instead of adding duplicates.
+- Rows persist in `chrome.storage.local`, so a browser restart does not lose your table.
+- **⤓ CSV** downloads RFC-4180 CSV with a UTF-8 BOM; **⧉ Copy TSV** pastes straight into Sheets or Excel. Both use the same ten headers.
+
+### How a missing LinkedIn URL is resolved
+
+1. **Direct** — the extractor already found a `/in/` or `/pub/` anchor next to that person. Shown as **Verified Direct**.
+2. **Search** — a paced Bing lookup for `site:linkedin.com/in/ "First Last" "Company"` (designation if company is blank). A result is accepted only when its own title or snippet contains every name token. Shown as **Auto-Resolved**.
+3. **Fallback** — nothing credible found: the cell stays empty, a **Needs Review** / **Verify** badge links to a search you can check yourself, and you can paste the URL by hand.
+
+Lookups are serialized and spaced ~1.9 s apart. If Bing raises a captcha or consent screen the resolver stops and tells you, instead of hammering the page. No profile URL is ever constructed from a name.
+
 ## Install
 
 1. `chrome://extensions` → **Developer mode** → **Load unpacked** → this folder. (Edge: same folder via `edge://extensions`.)
 2. Pin LeadScout. Stay logged into LinkedIn in that browser.
-3. Paste companies → **Start research** (or Ctrl+Enter) → **Download CSV**.
+3. Paste companies → **Start research** (or Ctrl+Enter) → **Download CSV**. For page-by-page work, open the **▤** workspace and press **Extract current page**.
 
 Quick mode ≈10 s per company, Standard ≈15–25 s, Deep ≈25–40 s. The queue runs in the background — close the popup and keep working. Pause / Resume / Stop / Retry / Refresh-all are all there, and if Bing asks for a human check, the queue pauses itself and resumes when you're done.
 
@@ -83,10 +112,18 @@ Settings → **API keys** saves each key into this browser only, with an optiona
 - LeadScout reads public search results and public pages at a human pace. Keep volumes reasonable and follow your local privacy law for outreach data.
 - Some company sites block automated reads; those rows come back marked "source blocked" rather than guessed.
 
+## Changelog
+
+| Version | What changed |
+|---|---|
+| **2.2.0** | Side-panel workspace: extract the current LinkedIn profile, people list or company team page; capture a selection from the context menu; edit all ten columns in place; paced LinkedIn URL resolver with Verified Direct / Auto-Resolved / Needs Review; CSV and TSV from one row model. |
+| **2.1.1** | Results tables mirror the CSV contract exactly; leaner README and artwork. |
+| **2.1.0** | Single 10-column CSV export across popup and results. |
+
 ## Development
 
 ```bash
-node tools/test.mjs           # 76 checks, including the extension import-graph check
+node tools/test.mjs           # 85 checks, including the extension import-graph check
 node tools/diag_linkcheck.mjs # standalone module-link check
 ```
 
@@ -94,8 +131,10 @@ node tools/diag_linkcheck.mjs # standalone module-link check
 manifest.json        MV3 config
 background.js        queue engine, Bing/LinkedIn/company-page readers, pipeline
 popup.html/.css/.js  main UI, key vault, progress, exports
+sidepanel.html/.css/.js  wide workspace: capture, edit, resolve, export
+content.js           on-page extractor (profile / list / team / selection)
 results.html/.js     full-page results view
-lib/                 parse · rank · ai · hunter · extract · keys · platform · verify-lead
+lib/                 parse · records · rank · ai · hunter · extract · keys · platform · verify-lead
 assets/              animated SVG previews
 tools/               tests and helpers
 ```

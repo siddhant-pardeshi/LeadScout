@@ -25,6 +25,8 @@ import { classifyDesignation, seniorityBonus } from './lib/rank.js';
 import { aiResearch, aiTestKey } from './lib/ai.js';
 import { hunterDomainSearch } from './lib/hunter.js';
 import { extractBingResults, extractLinkedInCompany, extractOfficialLeadership } from './lib/extract.js';
+import { extractPageLeads } from './content.js';
+import { normalizeRecord, linkedinSearchQuery } from './lib/records.js';
 
 // ------------------------------------------------------------ app state ----
 
@@ -1123,12 +1125,124 @@ async function closeWorkerTabs() {
 
 // ---------------------------------------------------------- message router ----
 
+// ------------------------------------------------- workspace / capture ----
+
+const PROFILE_URL_RE = /^https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/(?:in|pub)\/[^/?#]+/i;
+const CAPTURE_MENU_ID = 'leadscout-capture';
+const RESOLVE_GAP_MS = 1900;
+let lastResolveAt = 0;
+let resolveChain = Promise.resolve();
+
+function cleanProfileUrl(url) {
+  const m = String(url || '').match(PROFILE_URL_RE);
+  if (!m) return '';
+  try {
+    const u = new URL(m[0]);
+    return 'https://www.linkedin.com' + u.pathname.replace(/\/+$/, '') + '/';
+  } catch (e) { return ''; }
+}
+
+/** Serialize resolver lookups and keep them at least ~1.9s apart. */
+function paceResolve(task) {
+  const run = resolveChain.then(async () => {
+    const wait = Math.max(0, RESOLVE_GAP_MS - (Date.now() - lastResolveAt));
+    if (wait) await sleep(wait);
+    try { return await task(); } finally { lastResolveAt = Date.now(); }
+  });
+  resolveChain = run.catch(() => {});
+  return run;
+}
+
+/** One Bing pass that never pauses the research queue. */
+async function searchProfilesOnce(query) {
+  const host = SETTINGS.searchHost || 'www.bing.com';
+  const url = 'https://' + host + '/search?q=' + encodeURIComponent(query) + '&count=20';
+  const tabId = await ensureTab('bing', url);
+  await waitForTabLoad(tabId, 22000);
+  let res = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const frames = await chrome.scripting.executeScript({ target: { tabId }, func: extractBingResults });
+      res = frames && frames[0] && frames[0].result;
+    } catch (e) { res = null; }
+    if (res && (res.captcha || res.consent || (res.results || []).length)) break;
+    await sleep(1300);
+  }
+  if (!res) return { state: 'error', results: [] };
+  if (res.captcha) return { state: 'captcha', results: [] };
+  if (res.consent) return { state: 'consent', results: [] };
+  return { state: 'ok', results: (res.results || []).map(r => ({ ...r, url: decodeBingUrl(r.url) })) };
+}
+
+/**
+ * Tier 2: search for the exact person and accept only a /in/ or /pub/ result
+ * whose own title or snippet contains every name token.  Anything weaker is
+ * returned as "needs review" — a profile URL is never constructed.
+ */
+async function resolveLinkedInRecord(record) {
+  const rec = normalizeRecord(record);
+  if (rec.linkedinUrl) return { status: 'direct', url: rec.linkedinUrl, state: 'already' };
+  const query = linkedinSearchQuery(rec);
+  if (!query) return { status: 'review', url: '', state: 'no_name' };
+  return paceResolve(async () => {
+    const out = await searchProfilesOnce(query);
+    if (out.state !== 'ok') return { status: 'review', url: '', state: out.state, query };
+    const tokens = [rec.firstName, rec.lastName]
+      .filter(Boolean).map(t => t.toLowerCase()).filter(t => t.length > 1);
+    const hit = out.results.find(r => {
+      const profile = cleanProfileUrl(r.url);
+      if (!profile) return false;
+      const hay = (String(r.title || '') + ' ' + String(r.snippet || '')).toLowerCase();
+      return tokens.length ? tokens.every(t => hay.includes(t)) : false;
+    });
+    if (!hit) return { status: 'review', url: '', state: 'no_match', query };
+    return { status: 'auto', url: cleanProfileUrl(hit.url), state: 'ok', query };
+  });
+}
+
+function setupWorkspaceMenu() {
+  if (!chrome.contextMenus) return;
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: CAPTURE_MENU_ID,
+      title: 'Extract prospect to LeadScout',
+      contexts: ['selection', 'page']
+    }, () => { void chrome.runtime.lastError; });
+  });
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
       if (msg.type === 'ping') {
         // liveness probe from the popup — also confirms module state loaded
         sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+      } else if (msg.type === 'workspace:extract') {
+        let tab = null;
+        if (msg.tabId) { try { tab = await chrome.tabs.get(msg.tabId); } catch (e) { tab = null; } }
+        if (!tab) {
+          const list = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+          tab = (list && list[0]) || null;
+        }
+        if (!tab || tab.id == null) { sendResponse({ ok: false, error: 'No active tab to read.' }); return; }
+        if (!/^https?:/i.test(tab.url || '')) { sendResponse({ ok: false, error: 'Open a normal website tab — browser and extension pages cannot be read.' }); return; }
+        let frames = null;
+        try {
+          frames = await chrome.scripting.executeScript({
+            target: { tabId: tab.id, allFrames: false },
+            func: extractPageLeads,
+            args: [{ selectionOnly: !!msg.selectionOnly }]
+          });
+        } catch (e) {
+          sendResponse({ ok: false, error: 'This page blocks extension scripts. Try another tab.' });
+          return;
+        }
+        const pageResult = frames && frames[0] && frames[0].result;
+        if (!pageResult) { sendResponse({ ok: false, error: 'Nothing readable on this page.' }); return; }
+        sendResponse({ ok: true, ...pageResult });
+      } else if (msg.type === 'workspace:resolve') {
+        const resolved = await resolveLinkedInRecord(msg.record || {});
+        sendResponse({ ok: true, ...resolved });
       } else if (msg.type === 'start') {
         await loadAll();
         const items = (msg.items || []).map((it, i) => ({
@@ -1267,7 +1381,40 @@ chrome.alarms.onAlarm.addListener((a) => {
 chrome.runtime.onInstalled.addListener(async () => {
   await loadAll();
   await saveSettings();
+  setupWorkspaceMenu();
+  // Keep the toolbar click opening the popup; the workspace opens from inside
+  // it, from the page context menu, or from its own panel button.
+  if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+    try { await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }); } catch (e) { /* older browser */ }
+  }
 });
+
+// Capture from the page: store the payload, then open the workspace panel.
+if (chrome.contextMenus) {
+  chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+    if (!info || info.menuItemId !== CAPTURE_MENU_ID || !tab || tab.id == null) return;
+    try {
+      const frames = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: extractPageLeads,
+        args: [{ selectionOnly: !!info.selectionText }]
+      });
+      const captured = (frames && frames[0] && frames[0].result) || null;
+      await chrome.storage.local.set({
+        workspacePending: {
+          at: Date.now(),
+          pageUrl: tab.url || '',
+          title: tab.title || '',
+          selectionText: info.selectionText || '',
+          ...(captured || {})
+        }
+      });
+      if (chrome.sidePanel && chrome.sidePanel.open && tab.windowId != null) {
+        await chrome.sidePanel.open({ windowId: tab.windowId });
+      }
+    } catch (e) { /* restricted page: the panel still works from its button */ }
+  });
+}
 
 // Service-worker restart recovery: resume an interrupted job automatically.
 (async () => {

@@ -9,6 +9,11 @@ import {
   officialLeadershipCandidate, inferWebsiteFromSerp, officialPageCandidate, classifyOutcome,
   domainMatchesCompany, websiteCandidates, companyFactsFromPage
 } from '../lib/parse.js';
+import {
+  RECORD_FIELDS, RESOLVE_STATUS, emptyRecord, normalizeRecord, recordKey, mergeRecords,
+  recordRow, recordsToCSV, recordsToTSV, linkedinSearchQuery, verifySearchUrl,
+  needsResolution, parseSelectionText, isBlankRecord
+} from '../lib/records.js';
 import { classifyDesignation, seniorityBonus } from '../lib/rank.js';
 import { extractJson, assertSafeUrl } from '../lib/ai.js';
 import { extractBingResults, extractOfficialLeadership, extractLinkedInCompany } from '../lib/extract.js';
@@ -1009,13 +1014,127 @@ await (async function backgroundSmoke() {
   }
 })();
 
+
+// ---- v2.2 workspace records (side panel + capture) ----
+
+T('records: normalize keeps unknown fields blank and cleans URLs', () => {
+  const r = normalizeRecord({
+    name: 'Dr. Asha Shah', email: ' ASHA@Acme.IO ',
+    website: 'https://www.acme.com/about?x=1',
+    linkedinUrl: 'https://www.linkedin.com/in/asha-shah/?trk=abc'
+  });
+  assert.equal(r.firstName, 'Asha');
+  assert.equal(r.lastName, 'Shah');
+  assert.equal(r.email, 'asha@acme.io');
+  assert.equal(r.website, 'acme.com');
+  assert.equal(r.linkedinUrl, 'https://www.linkedin.com/in/asha-shah/');
+  assert.equal(r.company, '', 'no company is invented');
+  assert.deepEqual(recordRow(r).length, 10);
+  assert.deepEqual(Object.keys(emptyRecord()).slice(0, 10), RECORD_FIELDS);
+});
+
+T('records: dedupe by profile URL fills blanks but never overwrites', () => {
+  const out = mergeRecords(
+    [{ firstName: 'Asha', lastName: 'Shah', company: 'Acme Corp', linkedinUrl: 'https://www.linkedin.com/in/asha-shah/' }],
+    [{ firstName: 'Asha', lastName: 'Shah', company: 'Wrong Co', country: 'India', linkedinUrl: 'https://www.linkedin.com/in/asha-shah/?trk=x' }]
+  );
+  assert.equal(out.rows.length, 1);
+  assert.equal(out.rows[0].company, 'Acme Corp');
+  assert.equal(out.rows[0].country, 'India');
+  assert.equal(out.updated, 1);
+  assert.equal(out.added, 0);
+});
+
+T('records: dedupe by email+name, blank rows ignored', () => {
+  const out = mergeRecords(
+    [{ firstName: 'Luca', lastName: 'de Vries', email: 'luca@orbit.io' }],
+    [
+      { firstName: 'Luca', lastName: 'de Vries', email: 'luca@orbit.io', company: 'Orbit Labs' },
+      emptyRecord(),
+      { firstName: '', lastName: '', company: 'Ghost Co' }
+    ]
+  );
+  assert.equal(out.rows.length, 1);
+  assert.equal(out.rows[0].company, 'Orbit Labs');
+  assert.equal(recordKey(emptyRecord()), '', 'a blank row has no identity');
+});
+
+T('records: CSV is exactly ten values with quoting, Unicode and formula safety', () => {
+  const csv = recordsToCSV([
+    { firstName: 'José', lastName: 'García', company: 'Acme, Inc.', email: '=SUM(1,1)', designation: 'CTO' },
+    { firstName: 'A', lastName: 'B', website: 'acme.com', linkedinUrl: 'https://www.linkedin.com/in/ab/' }
+  ]);
+  const lines = csv.replace(/\r\n$/, '').split('\r\n');
+  assert.equal(lines[0], CRM_EXPORT_HEADERS.join(','));
+  assert.equal(lines.length, 3);
+  assert.ok(lines[1].includes('"Acme, Inc."'));
+  assert.ok(lines[1].includes('José,García'));
+  assert.ok(lines[1].includes("'=sum(1,1)"), 'formula-looking values stay text (email is lowercased)');
+});
+
+T('records: TSV collapses tabs and newlines so the grid cannot shift', () => {
+  const tsv = recordsToTSV([{ firstName: 'A', lastName: 'B', designation: 'Head\tof\nSales', company: 'Acme' }]);
+  const lines = tsv.split('\n');
+  assert.equal(lines[0], CRM_EXPORT_HEADERS.join('\t'));
+  const cells = lines[1].split('\t');
+  assert.equal(cells.length, 10);
+  assert.equal(cells[2], 'Head of Sales');
+});
+
+T('records: resolver query and verification link are honest', () => {
+  const rec = { firstName: 'Asha', lastName: 'Shah', company: 'Acme Corp' };
+  assert.equal(linkedinSearchQuery(rec), 'site:linkedin.com/in/ "Asha Shah" "Acme Corp"');
+  assert.equal(linkedinSearchQuery({ firstName: 'Asha', lastName: 'Shah', designation: 'CTO' }),
+    'site:linkedin.com/in/ "Asha Shah" "CTO"');
+  assert.equal(linkedinSearchQuery({ firstName: '', lastName: '' }), '');
+  assert.match(verifySearchUrl(rec), /^https:\/\/www\.google\.com\/search\?q=/);
+  assert.equal(needsResolution(rec), true);
+  assert.equal(needsResolution({ linkedinUrl: 'https://www.linkedin.com/in/xavier-doe/' }), false);
+});
+
+T('records: selection parsing handles separators and drops noise', () => {
+  const rows = parseSelectionText([
+    'Asha Shah — CTO at Acme Corp',
+    'Luca de Vries | VP Product | Orbit Labs',
+    'Priya Kumar, Head of AI, Nova Systems',
+    'Read more about our team',
+    'Contact us'
+  ].join('\n'));
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].firstName, 'Asha');
+  assert.equal(rows[0].designation, 'CTO');
+  assert.equal(rows[0].company, 'Acme Corp');
+  assert.equal(rows[1].lastName, 'de Vries');
+  assert.equal(rows[2].company, 'Nova Systems');
+});
+
+T('workspace: side panel headers match the CRM contract in order', () => {
+  const html = fs.readFileSync(new URL('../sidepanel.html', import.meta.url), 'utf8');
+  const ths = [...html.matchAll(/<th scope="col">([\s\S]*?)<\/th>/g)]
+    .map(m => m[1].replace(/<[^>]+>/g, '').trim())
+    .filter(v => /^[A-Z_]+$/.test(v) && v.length > 3);
+  assert.deepEqual(ths, CRM_EXPORT_HEADERS);
+  assert.equal(ths.length, 10);
+});
+
+T('workspace: manifest declares the side panel, capture menu and permissions', () => {
+  const m = JSON.parse(fs.readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
+  assert.equal(m.manifest_version, 3);
+  assert.equal(m.side_panel.default_path, 'sidepanel.html');
+  for (const p of ['sidePanel', 'contextMenus', 'activeTab', 'storage', 'scripting']) {
+    assert.ok(m.permissions.includes(p), 'missing permission ' + p);
+  }
+  assert.ok(!m.permissions.includes('tabs') === false);
+  assert.equal(m.optional_host_permissions.length, 1);
+});
+
 // ---- v1.4.1 ESM link check (reproduces Chrome "status code: 15") ----
 // Plain node --check is parse-only and cannot see import-binding conflicts
 // (e.g. a local function shadowing an imported name). Importing the entry
 // files with the real module loader does. Anything other than hitting a
 // browser-only global (chrome/document/…) is fatal.
 const BENIGN_RE = /\b(chrome|document|window|localStorage|navigator|location|URL|fetch|AbortController|crypto)\s+is not defined\b/i;
-const ENTRIES = ['../background.js', '../popup.js', '../results.js'];
+const ENTRIES = ['../background.js', '../popup.js', '../results.js', '../sidepanel.js'];
 
 await (async function linkCheck() {
   const name = 'ESM link check: background/popup/results import chains';
