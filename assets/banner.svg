@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-labelledby="bannerTitle bannerDesc">
+  <title id="bannerTitle">LeadScout — evidence-backed decision-maker research for Chrome and Edge</title>
+  <desc id="bannerDesc">Dark title card: LeadScout, with badges for Chrome MV3, Bing-powered search, current roles only and a CRM-ready CSV export.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B0D17"/>
+      <stop offset="1" stop-color="#151830"/>
+    </linearGradient>
+    <linearGradient id="titleGrad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="340" y2="0">
+      <stop offset="0"    stop-color="#6366F1"/>
+      <stop offset="0.35" stop-color="#A855F7"/>
+      <stop offset="0.5"  stop-color="#E9D5FF"/>
+      <stop offset="0.65" stop-color="#A855F7"/>
+      <stop offset="1"    stop-color="#6366F1"/>
+      <animateTransform attributeName="gradientTransform" type="translate"
+        values="320 0; 960 0; 320 0" dur="6s" repeatCount="indefinite"/>
+    </linearGradient>
+    <linearGradient id="hair" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="240" y2="0">
+      <stop offset="0"   stop-color="#4F46E5"/>
+      <stop offset="0.5" stop-color="#C084FC"/>
+      <stop offset="1"   stop-color="#4F46E5"/>
+      <animateTransform attributeName="gradientTransform" type="translate"
+        values="0 0; 960 0; 0 0" dur="5s" repeatCount="indefinite"/>
+    </linearGradient>
+    <filter id="blur40" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="42"/>
+    </filter>
+    <filter id="blur12" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="12"/>
+    </filter>
+    <clipPath id="frame"><rect x="0" y="0" width="1200" height="300" rx="24"/></clipPath>
+    <clipPath id="lensClip"><circle cx="168" cy="138" r="40"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <rect width="1200" height="300" fill="url(#bg)"/>
+
+    <!-- ambient glow blobs -->
+    <circle cx="1020" cy="70" r="120" fill="#6366F1" opacity="0.16" filter="url(#blur40)">
+      <animate attributeName="cx" values="1020;1060;1020" dur="9s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="560" cy="290" r="130" fill="#9333EA" opacity="0.13" filter="url(#blur40)">
+      <animate attributeName="cx" values="560;520;560" dur="11s" repeatCount="indefinite"/>
+    </circle>
+
+    <!-- drifting particles -->
+    <g fill="#A5B4FC">
+      <circle cx="420" cy="80" r="2.5" opacity="0.5">
+        <animate attributeName="cy" values="80;66;80" dur="6s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.5;0.15;0.5" dur="6s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="520" cy="230" r="2" opacity="0.4">
+        <animate attributeName="cy" values="230;216;230" dur="7.5s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.4;0.1;0.4" dur="7.5s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="860" cy="60" r="2.5" opacity="0.45">
+        <animate attributeName="cy" values="60;74;60" dur="8s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.45;0.12;0.45" dur="8s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="960" cy="210" r="2" opacity="0.5">
+        <animate attributeName="cy" values="210;196;210" dur="6.8s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.5;0.15;0.5" dur="6.8s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="740" cy="120" r="1.8" opacity="0.35">
+        <animate attributeName="opacity" values="0.35;0.08;0.35" dur="5.2s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="1120" cy="140" r="2.2" opacity="0.4">
+        <animate attributeName="cy" values="140;128;140" dur="7s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.4;0.1;0.4" dur="7s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+
+    <!-- logo: magnifier with pulsing data dots + scan sweep -->
+    <g>
+      <circle cx="168" cy="138" r="56" fill="#6366F1" opacity="0.28" filter="url(#blur12)">
+        <animate attributeName="opacity" values="0.28;0.5;0.28" dur="4s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="168" cy="138" r="40" fill="none" stroke="#FFFFFF" stroke-width="11"/>
+      <line x1="197" y1="167" x2="232" y2="202" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round"/>
+      <g clip-path="url(#lensClip)">
+        <rect x="140" y="96" width="4" height="90" fill="#C084FC" opacity="0.85">
+          <animate attributeName="x" values="132;196;132" dur="3.2s" repeatCount="indefinite"/>
+        </rect>
+      </g>
+      <circle cx="158" cy="130" r="6" fill="#FFFFFF">
+        <animate attributeName="r" values="6;8;6" dur="2.4s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="182" cy="122" r="6" fill="#FFFFFF">
+        <animate attributeName="r" values="6;8;6" dur="2.4s" begin="0.8s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="172" cy="150" r="6" fill="#FFFFFF">
+        <animate attributeName="r" values="6;8;6" dur="2.4s" begin="1.6s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+
+    <!-- title + subtitle -->
+    <text x="620" y="148" text-anchor="middle" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
+          font-size="70" font-weight="800" fill="url(#titleGrad)" letter-spacing="1">LeadScout</text>
+    <text x="620" y="192" text-anchor="middle" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
+          font-size="25" font-weight="600" fill="#B9BFDB">Evidence-Backed Decision-Maker Research</text>
+    <text x="620" y="222" text-anchor="middle" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
+          font-size="17" fill="#6F7794">for Chrome &amp; Edge · powered by Bing · AI-optional · Excel-ready</text>
+
+    <!-- feature pills -->
+    <g font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="15" font-weight="600">
+      <rect x="219" y="242" width="150" height="34" rx="17" fill="#1A1E33" stroke="#3A4162"/>
+      <text x="294" y="264" text-anchor="middle" fill="#C3C9E8">Chrome MV3</text>
+      <rect x="383" y="242" width="170" height="34" rx="17" fill="#1A1E33" stroke="#3A4162"/>
+      <text x="468" y="264" text-anchor="middle" fill="#C3C9E8">Bing-powered</text>
+      <rect x="567" y="242" width="216" height="34" rx="17" fill="#152233" stroke="#2E6E5B">
+        <animate attributeName="stroke" values="#2E6E5B;#34D399;#2E6E5B" dur="3s" repeatCount="indefinite"/>
+      </rect>
+      <text x="675" y="264" text-anchor="middle" fill="#34D399">Current roles only</text>
+      <rect x="797" y="242" width="196" height="34" rx="17" fill="#1A1E33" stroke="#3A4162"/>
+      <text x="895" y="264" text-anchor="middle" fill="#C3C9E8">CRM-ready CSV</text>
+    </g>
+
+    <!-- animated top hairline -->
+    <rect x="0" y="0" width="1200" height="5" fill="url(#hair)"/>
+    <rect x="0" y="295" width="1200" height="5" fill="url(#hair)"/>
+  </g>
+</svg>

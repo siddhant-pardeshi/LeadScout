@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 240" width="1200" height="240" role="img" aria-label="Star the LeadScout repository on GitHub">
+  <defs>
+    <linearGradient id="sbg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B0D17"/>
+      <stop offset="1" stop-color="#141731"/>
+    </linearGradient>
+    <linearGradient id="sborder" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="300" y2="0">
+      <stop offset="0"   stop-color="#4F46E5" stop-opacity="0.12"/>
+      <stop offset="0.5" stop-color="#FBBF24"/>
+      <stop offset="1"   stop-color="#4F46E5" stop-opacity="0.12"/>
+      <animateTransform attributeName="gradientTransform" type="translate"
+        values="0 0; 900 0; 0 0" dur="6s" repeatCount="indefinite"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FDE68A"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+    <filter id="sblur" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+    <clipPath id="sframe"><rect width="1200" height="240" rx="22"/></clipPath>
+    <clipPath id="starClip">
+      <polygon points="200,50 216.5,97.4 266.6,98.4 226.6,128.7 241.2,176.6 200,148 158.8,176.6 173.4,128.7 133.4,98.4 183.6,97.4"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#sframe)">
+    <rect width="1200" height="240" fill="url(#sbg)"/>
+    <rect x="1.5" y="1.5" width="1197" height="237" rx="21" fill="none" stroke="url(#sborder)" stroke-width="2.5"/>
+
+    <!-- warm glow behind the star -->
+    <circle cx="200" cy="118" r="86" fill="#F59E0B" opacity="0.18" filter="url(#sblur)">
+      <animate attributeName="opacity" values="0.18;0.34;0.18" dur="3.2s" repeatCount="indefinite"/>
+    </circle>
+
+    <!-- faint outline star, then the gold fill rises into it -->
+    <polygon points="200,50 216.5,97.4 266.6,98.4 226.6,128.7 241.2,176.6 200,148 158.8,176.6 173.4,128.7 133.4,98.4 183.6,97.4"
+      fill="none" stroke="#4B5578" stroke-width="3"/>
+    <g clip-path="url(#starClip)">
+      <rect x="120" y="180" width="160" height="130" fill="url(#gold)">
+        <animate attributeName="y" values="180;50;180" dur="5.2s"
+          keyTimes="0;0.55;1" repeatCount="indefinite"/>
+      </rect>
+    </g>
+
+    <!-- sparkles around the star -->
+    <g fill="#FDE68A">
+      <circle cx="268" cy="66" r="3"><animate attributeName="opacity" values="0;1;0" dur="2.6s" repeatCount="indefinite"/></circle>
+      <circle cx="132" cy="70" r="2.5"><animate attributeName="opacity" values="0;1;0" dur="3.1s" begin="0.7s" repeatCount="indefinite"/></circle>
+      <circle cx="286" cy="150" r="2.5"><animate attributeName="opacity" values="0;1;0" dur="2.9s" begin="1.2s" repeatCount="indefinite"/></circle>
+      <circle cx="118" cy="150" r="3"><animate attributeName="opacity" values="0;1;0" dur="3.4s" begin="1.8s" repeatCount="indefinite"/></circle>
+      <circle cx="200" cy="34" r="2.5"><animate attributeName="opacity" values="0;1;0" dur="2.4s" begin="0.4s" repeatCount="indefinite"/></circle>
+    </g>
+
+    <!-- copy -->
+    <text x="330" y="92" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
+          font-size="30" font-weight="800" fill="#E7E9F2">Did LeadScout save you a few hours?</text>
+    <text x="330" y="128" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
+          font-size="18" fill="#8A92AD">One star keeps the project alive and helps other recruiters find it.</text>
+    <text x="330" y="158" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
+          font-size="18" fill="#8A92AD">It genuinely takes one click.</text>
+
+    <rect x="330" y="176" width="196" height="42" rx="21" fill="#1A1E33" stroke="#FBBF24">
+      <animate attributeName="opacity" values="0.85;1;0.85" dur="2.4s" repeatCount="indefinite"/>
+    </rect>
+    <text x="428" y="203" text-anchor="middle" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
+          font-size="17" font-weight="800" fill="#FBBF24">⭐ Star the repo</text>
+
+    <text x="1130" y="208" text-anchor="end" font-family="Consolas,'Cascadia Mono',monospace"
+          font-size="13" fill="#525A78">github.com/siddhant-pardeshi/LeadScout</text>
+  </g>
+</svg>
