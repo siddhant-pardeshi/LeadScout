@@ -6,7 +6,8 @@ import {
   linkedinHandle, companyMatch, companyMatchPartial, domainFromWebsite, emailFor,
   buildTSV, buildCSV, extractSizeFromText, overlapTokens, kebabName, slugScore,
   looseResolveMatch, roleCurrency, matchHunterEmail, cell, exportCell, nameEvidence,
-  officialLeadershipCandidate, inferWebsiteFromSerp, officialPageCandidate, classifyOutcome
+  officialLeadershipCandidate, inferWebsiteFromSerp, officialPageCandidate, classifyOutcome,
+  domainMatchesCompany, websiteCandidates
 } from '../lib/parse.js';
 import { classifyDesignation, seniorityBonus } from '../lib/rank.js';
 import { extractJson, assertSafeUrl } from '../lib/ai.js';
@@ -321,6 +322,47 @@ T('inferWebsiteFromSerp: company homepage, not directories or lookalikes', () =>
   assert.equal(inferWebsiteFromSerp([{ title: 'Acme Corp', url: 'https://www.acme.com/' }], 'Acme Corp').host, 'acme.com');
 });
 
+T('inferWebsiteFromSerp: prefers the specific company domain', () => {
+  const site = inferWebsiteFromSerp([
+    { title: 'Godrej', url: 'https://godrej.com/' },
+    { title: 'Godrej Industries', url: 'https://godrejindustries.com/' }
+  ], 'Godrej Industries Group');
+  assert.equal(site.host, 'godrejindustries.com');
+});
+
+T('websiteCandidates/domainMatchesCompany: Indian company domains', () => {
+  assert.deepEqual(websiteCandidates('Jio-bp').slice(0, 2), ['https://jiobp.com/', 'https://jio.com/']);
+  assert.ok(websiteCandidates('SUN PHARMA').includes('https://sunpharma.com/'));
+  assert.ok(websiteCandidates('Godrej Industries Group').includes('https://godrejindustries.com/'));
+  assert.equal(domainMatchesCompany('sunpharma.com', 'SUN PHARMA'), true);
+  assert.equal(domainMatchesCompany('jiobp.com', 'Jio-bp'), true);
+  assert.equal(domainMatchesCompany('godrej.com', 'Godrej Industries Group'), false);
+  assert.equal(domainMatchesCompany('godrejindustries.com', 'Godrej Industries Group'), true);
+  assert.equal(domainMatchesCompany('redingtongroup.com', 'Redington'), true);
+});
+
+T('officialPageCandidate: legal-name domain trust and homepage leadership cards', () => {
+  const sun = officialPageCandidate({
+    name: 'DILIP SHANGHVI', role: 'Executive Chairman', section: 'Board of Directors',
+    pageTitle: 'Board of Directors | Sun Pharmaceutical Industries Limited',
+    url: 'https://sunpharma.com/board-of-directors', evidence: 'DILIP SHANGHVI Executive Chairman'
+  }, 'https://sunpharma.com/', 'SUN PHARMA');
+  assert.ok(sun);
+  assert.equal(sun.designation, 'Executive Chairman');
+  const welspun = officialPageCandidate({
+    name: 'BALKRISHAN GOENKA', role: 'Chairman, Welspun World', section: 'Awards & Recognitions',
+    pageTitle: 'Globally recognized leaders in Home Textiles and Line Pipes',
+    url: 'https://www.welspun.com/',
+    evidence: 'OUR LEADERSHIP Who Leads The Way Towards Excellence BALKRISHAN GOENKA Chairman, Welspun World'
+  }, 'https://www.welspun.com/', 'Welspun World');
+  assert.ok(welspun);
+  assert.equal(officialPageCandidate({
+    name: 'Charlie Bell', role: 'Executive Vice President, Engineer, Microsoft',
+    section: 'Board of Directors', pageTitle: 'Twilio Leadership Team | Twilio',
+    url: 'https://www.twilio.com/en-us/company/leadership', evidence: ''
+  }, 'https://www.twilio.com/', 'Twilio'), null);
+});
+
 T('officialPageCandidate: leadership yes, external board role and lookalike no', () => {
   const site = 'https://acme.example';
   const lead = officialPageCandidate({
@@ -427,6 +469,25 @@ T('extractLinkedInCompany: Cloudflare challenge is not a company', () => {
     assert.equal(out.found, false);
     assert.equal(out.authwall, true);
     assert.equal(out.blocked, true);
+    assert.equal(out.name, '');
+  } finally {
+    if (hadDocument) globalThis.document = oldDocument; else delete globalThis.document;
+  }
+});
+
+T('extractLinkedInCompany: Join LinkedIn authwall is not a company', () => {
+  const hadDocument = Object.prototype.hasOwnProperty.call(globalThis, 'document');
+  const oldDocument = globalThis.document;
+  globalThis.document = {
+    title: 'Join LinkedIn',
+    body: { innerText: 'Join LinkedIn to see who you know' },
+    querySelector() { return null; },
+    querySelectorAll() { return []; }
+  };
+  try {
+    const out = extractLinkedInCompany();
+    assert.equal(out.found, false);
+    assert.equal(out.authwall, true);
     assert.equal(out.name, '');
   } finally {
     if (hadDocument) globalThis.document = oldDocument; else delete globalThis.document;
@@ -819,7 +880,7 @@ await (async function backgroundSmoke() {
     runtime: {
       onMessage: { addListener: (fn) => { messageHandler = fn; } },
       onInstalled: { addListener: () => {} },
-      getManifest: () => ({ version: '1.7.1' }),
+      getManifest: () => ({ version: '1.8.0' }),
       getPlatformInfo: () => {}
     }
   };
@@ -837,7 +898,7 @@ await (async function backgroundSmoke() {
       });
       assert.equal(keepAlive, true);
     });
-    assert.deepEqual(response, { ok: true, version: '1.7.1' });
+    assert.deepEqual(response, { ok: true, version: '1.8.0' });
     passed++;
     console.log('  ok  ' + name);
   } catch (e) {

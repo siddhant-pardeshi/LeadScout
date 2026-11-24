@@ -18,7 +18,7 @@ import {
   isLinkedInProfile, companyMatch, companyMatchPartial, emailFor, domainFromWebsite,
   extractSizeFromText, overlapTokens, kebabName, slugScore, looseResolveMatch,
   roleCurrency, matchHunterEmail, cell, nameEvidence, officialLeadershipCandidate,
-  inferWebsiteFromSerp, officialPageCandidate, classifyOutcome
+  inferWebsiteFromSerp, officialPageCandidate, classifyOutcome, domainMatchesCompany, websiteCandidates
 } from './lib/parse.js';
 import { classifyDesignation, seniorityBonus } from './lib/rank.js';
 import { aiResearch, aiTestKey } from './lib/ai.js';
@@ -557,10 +557,12 @@ async function hunterLookup(domain, apiKey) {
 }
 
 const OFFICIAL_PATHS = [
-  '/leadership', '/company/leadership', '/en-us/company/leadership', '/en/company/leadership',
-  '/management', '/company/management', '/leadership-team', '/about/leadership',
-  '/about/management', '/executive-team', '/about/executive-team', '/people', '/about/people',
-  '/our-team', '/team', '/governance', '/board-of-directors'
+  '/leadership', '/company/leadership', '/about-us/leadership', '/know-us/leadership',
+  '/about-us/board-of-directors', '/board-of-directors', '/management', '/company/management',
+  '/en-us/company/leadership', '/en/company/leadership', '/our-leadership', '/who-we-are',
+  '/leadership-team', '/about/leadership', '/about/management', '/executive-team',
+  '/about/executive-team', '/people', '/about/people', '/our-team', '/team',
+  '/governance', '/leadership-and-governance'
 ];
 
 function isOfficialCandidateUrl(url) {
@@ -582,17 +584,18 @@ async function readOfficialLeadership(website, companyName) {
   const domain = domainFromWebsite(website);
   const stats = {
     used: true, pages: 0, candidates: 0, accepted: 0, blocked: 0, errors: 0, states: {},
-    rejected: { no_explicit_current_leader: 0 }, visited: []
+    rejected: { no_explicit_current_leader: 0 }, visited: [], website: ''
   };
   const people = [];
   if (!domain) return { people, stats };
   const proto = /^http:\/\//i.test(String(website)) ? 'http:' : 'https:';
   const base = proto + '//' + domain;
+  let officialWebsite = website;
   const seen = new Set();
   const queue = [base + '/'];
   let pathsAdded = false;
 
-  while (queue.length && stats.pages < 10 && people.length < 3) {
+  while (queue.length && stats.pages < 12 && people.length < 3) {
     if (!S.job.running || S.job.paused) throw new Error('paused');
     const url = queue.shift();
     const norm = String(url).replace(/#.*$/, '').replace(/\/+$/, '');
@@ -609,6 +612,10 @@ async function readOfficialLeadership(website, companyName) {
     } catch (e) {
       stats.errors = (stats.errors || 0) + 1;
       stats.states['official-error'] = (stats.states['official-error'] || 0) + 1;
+      if (!queue.length && !pathsAdded && !people.length) {
+        pathsAdded = true;
+        for (const p of OFFICIAL_PATHS) queue.push(base + p);
+      }
       continue;
     }
     if (!out) {
@@ -624,6 +631,19 @@ async function readOfficialLeadership(website, companyName) {
       stats.blocked++;
       stats.states['official-blocked'] = (stats.states['official-blocked'] || 0) + 1;
     } else {
+      const finalUrl = out.url || url;
+      try {
+        const originalHost = new URL(officialWebsite).hostname.replace(/^www\./, '');
+        const finalHost = new URL(finalUrl).hostname.replace(/^www\./, '');
+        // A verified company site may redirect to its canonical domain (e.g.
+        // redington.group → redingtongroup.com). Follow that domain for the rest
+        // of the crawl only when the page still names the company.
+        if (finalHost && finalHost !== originalHost &&
+            (domainMatchesCompany(finalHost, companyName) || companyMatch(out.title || '', companyName))) {
+          officialWebsite = finalUrl;
+          stats.website = finalUrl;
+        }
+      } catch (e) { /* keep the original website */ }
       const pageCandidates = Array.isArray(out.candidates) ? out.candidates : [];
       stats.candidates += pageCandidates.length;
       let pageAccepted = 0;
@@ -632,7 +652,7 @@ async function readOfficialLeadership(website, companyName) {
           ...candidate,
           url: out.url || url,
           pageTitle: out.title || ''
-        }, website, companyName);
+        }, officialWebsite, companyName);
         if (!validated) { stats.rejected.no_explicit_current_leader++; continue; }
         if (people.some(p => p.name.toLowerCase() === validated.name.toLowerCase())) continue;
         people.push({
@@ -669,6 +689,28 @@ async function readOfficialLeadership(website, companyName) {
     }
   }
   return { people, stats };
+}
+
+/** Probe deterministic company-name domains when search did not yield a website. */
+async function probeWebsiteCandidates(companyName) {
+  const candidates = websiteCandidates(companyName).slice(0, 5);
+  for (const url of candidates) {
+    if (!S.job.running || S.job.paused) throw new Error('paused');
+    try {
+      const tabId = await ensureTab('official', url);
+      await waitForTabLoad(tabId, 18000);
+      await sleep(700);
+      const frames = await chrome.scripting.executeScript({ target: { tabId }, func: extractOfficialLeadership });
+      const out = frames && frames[0] && frames[0].result;
+      if (!out || out.blocked) continue;
+      const finalUrl = out.url || url;
+      let finalHost = '';
+      try { finalHost = new URL(finalUrl).hostname; } catch (e) { finalHost = new URL(url).hostname; }
+      if (!domainMatchesCompany(finalHost, companyName) && !companyMatch(out.title || '', companyName)) continue;
+      return { url: finalUrl, host: finalHost.replace(/^www\./, '') };
+    } catch (e) { /* try the next candidate */ }
+  }
+  return null;
 }
 
 async function researchCompany(item, idx) {
@@ -775,7 +817,7 @@ async function researchCompany(item, idx) {
       liData = await readLinkedInCompany(comp.slug);
     }
     if (liData && !liData.authwall && liData.found) {
-      if (liData.name && liData.name.length > 1) comp.name = liData.name;
+      if (liData.name && liData.name.length > 1 && overlapTokens(liData.name, companyName()) > 0) comp.name = liData.name;
       if (liData.industry) comp.industry = liData.industry;
       if (liData.size) comp.size = liData.size;
       if (liData.hq) comp.hq = liData.hq;
@@ -794,6 +836,10 @@ async function researchCompany(item, idx) {
     const webSerp = await search(stripQuotes(companyName()) + ' official website');
     const web = inferWebsiteFromSerp(webSerp, companyName());
     if (web) { comp.website = web.url; comp.websiteSource = 'search'; }
+    if (!comp.website) {
+      const probed = await probeWebsiteCandidates(companyName());
+      if (probed) { comp.website = probed.url; comp.websiteSource = 'search'; }
+    }
   }
 
   let serp = [];
@@ -830,6 +876,7 @@ async function researchCompany(item, idx) {
     comp.discovery.officialFallbackUsed = true;
     comp.discovery.official.used = true;
     const scan = await readOfficialLeadership(comp.website, companyName());
+    if (scan.stats.website) { comp.website = scan.stats.website; comp.websiteSource = 'search'; }
     comp.discovery.official.pages = scan.stats.pages;
     comp.discovery.official.candidates = scan.stats.candidates;
     comp.discovery.official.accepted = scan.stats.accepted;

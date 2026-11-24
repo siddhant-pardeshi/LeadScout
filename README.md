@@ -11,8 +11,8 @@ Runs in your browser · Bing + company-owned pages · works without any API key 
 
 [![Chrome MV3](https://img.shields.io/badge/Manifest-V3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/)
 [![Edge](https://img.shields.io/badge/Microsoft%20Edge-supported-0078D7?logo=microsoftedge&logoColor=white)](https://www.microsoft.com/edge)
-[![Version](https://img.shields.io/badge/version-1.7.1-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
-[![Tests](https://img.shields.io/badge/tests-65%20passing-34D399)](#-testing--quality)
+[![Version](https://img.shields.io/badge/version-1.8.0-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
+[![Tests](https://img.shields.io/badge/tests-69%20passing-34D399)](#-testing--quality)
 [![License](https://img.shields.io/badge/license-MIT-34D399)](LICENSE)
 [![Bing](https://img.shields.io/badge/search-Bing-008373)](https://www.bing.com)
 
@@ -254,7 +254,7 @@ Key invariants live in code: profile URLs from real results, AI names grounded i
 ## 🧪 Testing and quality
 
 ```bash
-node tools/test.mjs                  # 65 deterministic checks + MV3/ESM smoke tests
+node tools/test.mjs                  # 69 deterministic checks + MV3/ESM smoke tests
 node tools/diag_linkcheck.mjs        # standalone import-graph check
 node tools/eval-evidence.mjs         # evidence-verifier smoke test
 node tools/live-eval-evidence.mjs --offline   # 11-claim comparison
@@ -262,7 +262,7 @@ node tools/live-eval-evidence.mjs --offline   # 11-claim comparison
 
 The suite covers input parsing, Bing redirect decoding, title extraction, company matching, the 3-tier resolver, role-currency logic, the AI corpus-grounding gate, key/expiry math, Hunter matching and TSV/CSV builders.
 
-**Manual live smoke (24 Nov 2026, Edge 158, no API key):** Twilio → 7 official people with evidence URLs; HubSpot → 9; Freshworks → 9; a deliberately nonexistent company → `no_profile_results` with query/result/profile diagnostics. Re-verify names and roles against the linked evidence before outreach.
+**Manual live smoke (24 Nov 2026, Edge 158, no API key):** Twilio → 7 official people; HubSpot → 9; Freshworks → 9; Lupin → 12; Redington → 8; Sun Pharma → 8; Welspun World → 4. Godrej Industries returned **Source blocked** (its site rejects automated access), Jio-bp had no readable leadership page, and a nonexistent company returned `no_profile_results`. Re-verify names and roles against the linked evidence before outreach.
 
 ---
 
@@ -296,6 +296,7 @@ The suite covers input parsing, Bing redirect decoding, title extraction, compan
 
 | Version | Highlights |
 |---|---|
+| **1.8.0** | Indian/enterprise recovery: company-domain probing (`jiobp.com`, `sunpharma.com`), canonical redirects (`redington.group` → `redingtongroup.com`), `/about-us` + `/know-us` + board paths, homepage leadership cards, legal-name domain trust, authwall title guard; live-verified Lupin 12, Redington 8, Sun 8, Welspun 4. |
 | **1.7.1** | Removed the redundant optional `https://*/*` host permission (already covered by required host access); added a manifest regression test. |
 | **1.7.0** | Direct company-site leadership recovery (JSON-LD, heading pairs, cards), website inference when LinkedIn is walled, Cloudflare/authwall detection, source-blocked/no-profile outcomes, evidence URL + source columns, broad company-site host access; live-verified on Twilio, HubSpot and Freshworks. |
 | **1.6.0** | Fixed Bing profile-anchor extraction when generic results are present; decodes Bing-wrapped profile links; source-aware company-site leadership fallback; persisted candidate diagnostics and honest blocked/error/no-profile states; Chrome 116-compatible alarm recovery. |
