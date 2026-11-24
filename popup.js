@@ -279,6 +279,35 @@ function companyCell(comp) {
   return td;
 }
 
+// Profile-backfill surfacing: when Bing stalls the per-person lookup, the
+// empty LINKEDIN_URL column needs a visible reason, not silence.
+function resolveTotals(results) {
+  let attempts = 0, resolved = 0, blocked = false;
+  for (const c of (results || [])) {
+    const rs = c && c.discovery && c.discovery.resolve;
+    if (!rs) continue;
+    attempts += Number(rs.attempts) || 0;
+    resolved += Number(rs.resolved) || 0;
+    if (rs.state === 'blocked') blocked = true;
+  }
+  return { attempts: attempts, resolved: resolved, blocked: blocked };
+}
+
+function resolveSummary(results) {
+  const t = resolveTotals(results);
+  if (!t.attempts && !t.resolved) return '';
+  let txt = ' · profile lookup: ' + t.resolved + '/' + t.attempts + ' found';
+  if (t.blocked) txt += ' — paused by a Bing check: solve it, then ⟳ Refresh all';
+  return txt;
+}
+
+function resolveTitle(comp) {
+  const rs = comp && comp.discovery && comp.discovery.resolve;
+  if (!rs || (!rs.attempts && rs.state !== 'blocked')) return '';
+  return 'profile lookup: ' + (rs.resolved || 0) + '/' + (rs.attempts || 0) +
+    (rs.state === 'blocked' ? ' — blocked by a Bing check; Refresh all after solving it' : '');
+}
+
 function linkEl(href, txt) {
   // v1.4 security: only real web links become anchors — never javascript:/data:
   if (!/^https?:\/\//i.test(String(href || ''))) {
@@ -340,7 +369,8 @@ function renderResults(force) {
   const rows = flattenRows();
   const peopleCount = rows.filter(r => r.kind === 'person').length;
   const verifiedCount = rows.filter(r => r.kind === 'person' && r.p.urlVerified).length;
-  $('resSummary').textContent = peopleCount + ' people · ' + verifiedCount + ' verified';
+  $('resSummary').textContent =
+    peopleCount + ' people · ' + verifiedCount + ' verified' + resolveSummary(job.results || []);
 
   const visible = rows.filter(r => rowMatches(r, ui.filter, ui.search)).slice(0, 300);
   const tbody = $('resBody');
@@ -390,6 +420,8 @@ function renderResults(force) {
 
     const tdCo = companyCell(c);
     if (c.aiNote) tdCo.title = c.aiNote;
+    const rTitle = resolveTitle(c);
+    if (rTitle) tdCo.title = (tdCo.title ? tdCo.title + ' · ' : '') + rTitle;
     tr.appendChild(tdCo);
 
     tr.appendChild(tdText(c.size || '', 'ds'));

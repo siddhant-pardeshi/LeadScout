@@ -128,6 +128,35 @@ function reviewDisplay(comp) {
   };
 }
 
+// Profile-backfill surfacing: the resolver runs per company; without this the
+// "no LinkedIn URL" outcome is a silent mystery when Bing stalls it.
+function resolveTotals(results) {
+  let attempts = 0, resolved = 0, blocked = false;
+  for (const c of (results || [])) {
+    const rs = c && c.discovery && c.discovery.resolve;
+    if (!rs) continue;
+    attempts += Number(rs.attempts) || 0;
+    resolved += Number(rs.resolved) || 0;
+    if (rs.state === 'blocked') blocked = true;
+  }
+  return { attempts: attempts, resolved: resolved, blocked: blocked };
+}
+
+function resolveSummary(results) {
+  const t = resolveTotals(results);
+  if (!t.attempts && !t.resolved) return '';
+  let txt = ' · profile lookup: ' + t.resolved + '/' + t.attempts + ' found';
+  if (t.blocked) txt += ' — paused by a Bing check: solve it, then ⟳ Refresh all';
+  return txt;
+}
+
+function resolveTitle(comp) {
+  const rs = comp && comp.discovery && comp.discovery.resolve;
+  if (!rs || (!rs.attempts && rs.state !== 'blocked')) return '';
+  return 'profile lookup: ' + (rs.resolved || 0) + '/' + (rs.attempts || 0) +
+    (rs.state === 'blocked' ? ' — blocked by a Bing check; Refresh all after solving it' : '');
+}
+
 // v1.4 lag fix: rebuild the table only when data actually changed
 let lastKey = '';
 
@@ -149,6 +178,7 @@ function render(force) {
   let status = '';
   if (job.running) status = ' · running…';
   else if (job.paused) status = ' · paused';
+  status += resolveSummary(job.results || []);
   $('resSummary').textContent =
     peopleCount + ' people · ' + verifiedCount + ' verified · ' +
     compCount + ' companies' + status;
@@ -205,6 +235,8 @@ function render(force) {
 
     const tdCo = companyCell(c);
     if (c.aiNote) tdCo.title = c.aiNote;
+    const rTitle = resolveTitle(c);
+    if (rTitle) tdCo.title = (tdCo.title ? tdCo.title + ' · ' : '') + rTitle;
     tr.appendChild(tdCo);
 
     tr.appendChild(tdText(c.size || '', 'ds'));

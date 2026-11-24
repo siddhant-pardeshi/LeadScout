@@ -1194,8 +1194,11 @@ async function searchProfilesOnce(query) {
       const frames = await chrome.scripting.executeScript({ target: { tabId }, func: extractBingResults });
       res = frames && frames[0] && frames[0].result;
     } catch (e) { res = null; }
-    if (res && (res.captcha || res.consent || (res.results || []).length)) break;
-    await sleep(1700);
+    if (res && (res.captcha || (res.results || []).length)) break;
+    // A consent page usually clears once the main queue's cookie is present —
+    // give it a longer beat instead of counting it as a hard strike at once.
+    if (res && res.consent) await sleep(2800);
+    else await sleep(1700);
   }
   if (!res) return { state: 'error', results: [] };
   if (res.captcha) return { state: 'captcha', results: [] };
