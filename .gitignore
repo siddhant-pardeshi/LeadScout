@@ -1,6 +1,9 @@
 # Local audit artifacts
 .mimosa/
 
+# Local project context / handoff notes (never shipped)
+context/
+
 # OS noise
 Thumbs.db
 .DS_Store
