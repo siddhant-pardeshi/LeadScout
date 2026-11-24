@@ -8,6 +8,10 @@ import {
 } from '../lib/parse.js';
 import { classifyDesignation, seniorityBonus } from '../lib/rank.js';
 import { extractJson, assertSafeUrl } from '../lib/ai.js';
+import {
+  KEY_PROVIDERS, emptyKeyMeta, normalizeKeyMeta, isDateStr, localDateStr,
+  daysLeft, keyStatus, fmtDate, maskKey
+} from '../lib/keys.js';
 
 let passed = 0, failed = 0;
 function T(name, fn) {
@@ -324,6 +328,66 @@ T('nameEvidence: punctuation and name particles are tolerated', () => {
   const serp = [{ title: "Anne-Marie O'Neil - Head of AI - Acme | LinkedIn", snippet: '' }];
   const e = nameEvidence("Anne-Marie O'Neil", serp, 'Acme');
   assert.equal(e.role, 'current');
+});
+
+// ---- v1.5 API key vault ----
+T('keys: default schema covers every provider', () => {
+  const meta = emptyKeyMeta();
+  assert.deepEqual(Object.keys(meta).sort(), [...KEY_PROVIDERS].sort());
+  assert.equal(meta.groq.expiresAt, '');
+  assert.equal(meta.hunter.lastCheckOk, null);
+});
+
+T('keys: normalize drops junk and fills missing fields', () => {
+  const n = normalizeKeyMeta({
+    groq: { savedAt: '2026-11-24', expiresAt: 'nope', lastCheckOk: true },
+    hunter: { expiresAt: '2026-12-31' }
+  });
+  assert.equal(n.groq.savedAt, '2026-11-24');
+  assert.equal(n.groq.expiresAt, '');
+  assert.equal(n.groq.lastCheckOk, true);
+  assert.equal(n.hunter.expiresAt, '2026-12-31');
+  assert.equal(n.gemini.savedAt, '');
+});
+
+T('keys: calendar-day math across today/tomorrow/yesterday', () => {
+  const now = new Date(2026, 10, 24, 10, 0, 0).getTime();
+  assert.equal(daysLeft('2026-11-24', now), 0);
+  assert.equal(daysLeft('2026-11-25', now), 1);
+  assert.equal(daysLeft('2026-11-23', now), -1);
+  assert.equal(daysLeft('not-a-date', now), null);
+});
+
+T('keys: status labels for none/active/soon/expired', () => {
+  const now = new Date(2026, 10, 24, 10, 0, 0).getTime();
+  assert.equal(keyStatus({}, now).state, 'none');
+  assert.equal(keyStatus({ expiresAt: '2027-01-10' }, now).state, 'active');
+  assert.equal(keyStatus({ expiresAt: '2026-12-10' }, now).state, 'soon');
+  assert.equal(keyStatus({ expiresAt: '2026-11-20' }, now).state, 'expired');
+  assert.match(keyStatus({ expiresAt: '2026-11-20' }, now).label, /4 days ago/);
+  assert.equal(keyStatus({ expiresAt: '2026-11-24' }, now).label, 'Expires today');
+});
+
+T('keys: date validation rejects impossible dates', () => {
+  assert.equal(isDateStr('2026-11-24'), true);
+  assert.equal(isDateStr('2026-02-29'), false);
+  assert.equal(isDateStr('24-11-2026'), false);
+});
+
+T('keys: local dates and display dates use the local calendar', () => {
+  const d = new Date(2026, 0, 5, 23, 30, 0);
+  assert.equal(localDateStr(d.getTime()), '2026-01-05');
+  assert.equal(fmtDate('2026-11-24'), '24 Nov 2026');
+  assert.equal(fmtDate('bad'), '');
+});
+
+T('keys: mask never exposes a full key', () => {
+  const k = 'gsk_1234567890abcdef';
+  const m = maskKey(k);
+  assert.ok(!m.includes(k));
+  assert.equal(m, 'gsk_…cdef');
+  assert.equal(maskKey('short'), '••••');
+  assert.equal(maskKey(''), '');
 });
 
 // ---- v1.3 Hunter.io email matching ----

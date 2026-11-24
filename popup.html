@@ -35,6 +35,7 @@
 
   <main class="content">
     <div id="swBanner" class="banner err hidden"></div>
+    <div id="keyBanner" class="banner warn hidden"></div>
     <!-- ============ INPUT CARD ============ -->
     <section class="card" id="cardInput">
       <div class="card-head">
@@ -166,10 +167,61 @@
             <option value="custom">Custom OpenAI-compatible</option>
           </select>
         </label>
-        <label class="opt"><span>Groq API key</span><input type="password" id="setKeyGroq" class="text-input" autocomplete="off"></label>
-        <label class="opt"><span>Gemini API key</span><input type="password" id="setKeyGemini" class="text-input" autocomplete="off"></label>
-        <label class="opt"><span>OpenRouter API key</span><input type="password" id="setKeyOpenrouter" class="text-input" autocomplete="off"></label>
-        <label class="opt"><span>Hunter.io API key (optional — real emails; free 25 searches/mo at hunter.io)</span><input type="password" id="setKeyHunter" class="text-input" autocomplete="off"></label>
+        <details class="key-vault" id="keyVault" open>
+          <summary><span>🔑 API keys</span><span class="kv-hint">saved permanently on this device</span></summary>
+          <p class="kv-help">Keys are stored in this browser profile and reused on every run. Set a rotation date to get an expiry warning — providers do not publish key expiry dates.</p>
+          <label class="kv-show"><input type="checkbox" id="showKeys"> Show keys</label>
+
+          <div class="key-row" data-provider="groq">
+            <div class="key-top"><span class="key-name">Groq <em>free</em></span><span class="key-status none" id="keyStatusGroq">not saved</span></div>
+            <div class="key-line">
+              <input type="password" id="setKeyGroq" class="text-input key-input" autocomplete="off" spellcheck="false" placeholder="gsk_...">
+              <button class="btn ghost small" data-key-save="groq">Save</button>
+              <button class="icon-btn tiny" data-key-clear="groq" title="Remove saved key" aria-label="Remove Groq key">✕</button>
+            </div>
+            <label class="key-exp"><span>Expiry / rotation date</span><input type="date" id="setExpGroq"></label>
+          </div>
+
+          <div class="key-row" data-provider="gemini">
+            <div class="key-top"><span class="key-name">Gemini <em>free</em></span><span class="key-status none" id="keyStatusGemini">not saved</span></div>
+            <div class="key-line">
+              <input type="password" id="setKeyGemini" class="text-input key-input" autocomplete="off" spellcheck="false" placeholder="AIza...">
+              <button class="btn ghost small" data-key-save="gemini">Save</button>
+              <button class="icon-btn tiny" data-key-clear="gemini" title="Remove saved key" aria-label="Remove Gemini key">✕</button>
+            </div>
+            <label class="key-exp"><span>Expiry / rotation date</span><input type="date" id="setExpGemini"></label>
+          </div>
+
+          <div class="key-row" data-provider="openrouter">
+            <div class="key-top"><span class="key-name">OpenRouter <em>free models</em></span><span class="key-status none" id="keyStatusOpenrouter">not saved</span></div>
+            <div class="key-line">
+              <input type="password" id="setKeyOpenrouter" class="text-input key-input" autocomplete="off" spellcheck="false" placeholder="sk-or-...">
+              <button class="btn ghost small" data-key-save="openrouter">Save</button>
+              <button class="icon-btn tiny" data-key-clear="openrouter" title="Remove saved key" aria-label="Remove OpenRouter key">✕</button>
+            </div>
+            <label class="key-exp"><span>Expiry / rotation date</span><input type="date" id="setExpOpenrouter"></label>
+          </div>
+
+          <div class="key-row" data-provider="custom">
+            <div class="key-top"><span class="key-name">Custom endpoint</span><span class="key-status none" id="keyStatusCustom">not saved</span></div>
+            <div class="key-line">
+              <input type="password" id="setKeyCustom" class="text-input key-input" autocomplete="off" spellcheck="false" placeholder="API key for your endpoint">
+              <button class="btn ghost small" data-key-save="custom">Save</button>
+              <button class="icon-btn tiny" data-key-clear="custom" title="Remove saved key" aria-label="Remove custom key">✕</button>
+            </div>
+            <label class="key-exp"><span>Expiry / rotation date</span><input type="date" id="setExpCustom"></label>
+          </div>
+
+          <div class="key-row" data-provider="hunter">
+            <div class="key-top"><span class="key-name">Hunter.io <em>optional · real emails</em></span><span class="key-status none" id="keyStatusHunter">not saved</span></div>
+            <div class="key-line">
+              <input type="password" id="setKeyHunter" class="text-input key-input" autocomplete="off" spellcheck="false" placeholder="Hunter API key">
+              <button class="btn ghost small" data-key-save="hunter">Save</button>
+              <button class="icon-btn tiny" data-key-clear="hunter" title="Remove saved key" aria-label="Remove Hunter key">✕</button>
+            </div>
+            <label class="key-exp"><span>Expiry / rotation date</span><input type="date" id="setExpHunter"></label>
+          </div>
+        </details>
         <div id="customFields" class="hidden">
           <label class="opt"><span>Custom base URL (e.g. https://api.example.com/v1)</span><input type="text" id="setCustomBase" class="text-input" placeholder="https://api.example.com/v1"></label>
           <label class="opt"><span>Custom model id</span><input type="text" id="setCustomModel" class="text-input" placeholder="gpt-4o-mini"></label>
@@ -201,7 +253,7 @@
             <option value="light">Light</option>
           </select>
         </label>
-        <p class="privacy">🔒 Keys stay in this browser's local storage. Research runs on public search results and public pages you can already view. Emails are pattern estimates — verify before outreach.</p>
+        <p class="privacy">🔒 Keys are stored permanently in this browser profile and never uploaded by LeadScout. Works in Google Chrome and Microsoft Edge (Bing). Research runs on public search results and public pages you can already view. Emails are pattern estimates — verify before outreach.</p>
       </div>
       <div class="modal-foot">
         <button id="btnSaveSettings" class="btn primary">Save settings</button>

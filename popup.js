@@ -1,13 +1,20 @@
 // LeadScout — popup controller (part 1: helpers, state, progress)
 
 import { DEFAULT_SETTINGS, parseInputs, buildTSV, buildCSV, fmtEta } from './lib/parse.js';
+import { KEY_PROVIDERS, KEY_LABELS, normalizeKeyMeta, keyStatus, fmtDate, localDateStr, isDateStr } from './lib/keys.js';
+import { extensionContextOk, extensionsUrl } from './lib/platform.js';
 import { extractLinkedInCompany } from './lib/extract.js';
 
 const $ = (id) => document.getElementById(id);
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const keyInputId = (p) => 'setKey' + cap(p);
+const keyExpId = (p) => 'setExp' + cap(p);
+const keyStatusId = (p) => 'keyStatus' + cap(p);
 
 let settings = { ...DEFAULT_SETTINGS, keys: { ...DEFAULT_SETTINGS.keys } };
 let job = null;
 const ui = { filter: 'all', search: '', pollTimer: null };
+const clearArm = { provider: '', timer: null };
 
 function toast(msg, ms = 1800) {
   const t = $('toast');
@@ -66,7 +73,8 @@ async function loadState() {
   const st = await chrome.storage.local.get(['settings', 'job']);
   if (st.settings) {
     settings = { ...DEFAULT_SETTINGS, ...st.settings,
-      keys: { ...DEFAULT_SETTINGS.keys, ...(st.settings.keys || {}) } };
+      keys: { ...DEFAULT_SETTINGS.keys, ...(st.settings.keys || {}) },
+      keyMeta: normalizeKeyMeta(st.settings.keyMeta) };
   }
   job = st.job || null;
 }
@@ -102,9 +110,15 @@ function updateInputCount() {
 function currentProviderKeyReady() {
   const prov = $('optProvider').value;
   if (prov === 'none') return { ready: true };
+  if (prov === 'custom') {
+    if (settings.customBase && settings.keys && settings.keys.custom) return { ready: true };
+    return {
+      ready: false,
+      hint: 'Custom endpoint needs both a base URL and an API key — add them in Settings (gear icon).'
+    };
+  }
   const key = (settings.keys && settings.keys[prov]) || '';
   if (key) return { ready: true };
-  if (prov === 'custom' && settings.customBase) return { ready: true };
   return {
     ready: false,
     hint: 'No ' + prov + ' API key saved yet — add one in Settings (gear icon), or pick "None (Bing only)".'
@@ -553,12 +567,192 @@ function doDownload(kind) {
 
 // ------------------------------------------------------------- settings ----
 
+function shortExpiry(st) {
+  if (st.state === 'none') return 'no expiry';
+  if (st.state === 'expired') return 'expired ' + fmtDate(st.expiresAt).replace(/ \d{4}$/, '');
+  if (st.daysLeft === 0) return 'expires today';
+  if (st.state === 'soon') return 'expires ' + fmtDate(st.expiresAt).replace(/ \d{4}$/, '');
+  return 'expires ' + fmtDate(st.expiresAt);
+}
+
+function renderKeyStatus(provider) {
+  const el = $(keyStatusId(provider));
+  if (!el) return;
+  const key = (settings.keys && settings.keys[provider]) || '';
+  const meta = normalizeKeyMeta(settings.keyMeta)[provider];
+  if (!key) {
+    el.textContent = 'not saved';
+    el.className = 'key-status none';
+    el.title = 'No key saved yet';
+    return;
+  }
+  const st = keyStatus(meta);
+  el.textContent = 'saved · ' + shortExpiry(st);
+  el.className = 'key-status ' + st.state;
+  let title = 'Saved ' + (meta.savedAt ? fmtDate(meta.savedAt) : '(date not recorded)');
+  if (st.expiresAt) title += ' · Expires ' + fmtDate(st.expiresAt) + ' (' + st.label + ')';
+  else title += ' · No expiry date set (providers do not publish one)';
+  if (meta.lastCheckedAt) {
+    title += ' · Last checked ' + fmtDate(meta.lastCheckedAt) + (meta.lastCheckOk ? ' ✓' : ' ✗');
+  }
+  el.title = title;
+}
+
+function renderKeyWarnings() {
+  const banner = $('keyBanner');
+  if (!banner) return;
+  const meta = normalizeKeyMeta(settings.keyMeta);
+  const keys = settings.keys || {};
+  const issues = [];
+  for (const p of KEY_PROVIDERS) {
+    if (!keys[p]) continue;
+    const st = keyStatus(meta[p]);
+    if (st.state === 'expired') {
+      issues.push(KEY_LABELS[p] + ' key expired');
+    } else if (st.state === 'soon') {
+      issues.push(KEY_LABELS[p] + ' key ' + st.label.toLowerCase() +
+        (st.expiresAt ? ' (' + fmtDate(st.expiresAt) + ')' : ''));
+    }
+  }
+  if (!issues.length) {
+    banner.classList.add('hidden');
+    banner.onclick = null;
+    return;
+  }
+  banner.textContent = '⚠ ' + issues.join(' · ') + ' — click to update in Settings.';
+  banner.classList.remove('hidden');
+  banner.onclick = openSettings;
+}
+
+function applyKeyVisibility() {
+  const show = !!($('showKeys') && $('showKeys').checked);
+  document.querySelectorAll('.key-input').forEach((el) => {
+    el.type = show ? 'text' : 'password';
+  });
+}
+
+function collectFormSettings() {
+  const keys = { ...(settings.keys || {}) };
+  const meta = normalizeKeyMeta(settings.keyMeta);
+  for (const p of KEY_PROVIDERS) {
+    const input = $(keyInputId(p));
+    if (!input) continue;
+    const val = input.value.trim();
+    // A blank field means "keep the saved key", never "delete it".
+    if (val && val !== (keys[p] || '')) {
+      keys[p] = val;
+      meta[p].savedAt = localDateStr();
+      meta[p].lastCheckedAt = '';
+      meta[p].lastCheckOk = null;
+    }
+    const exp = $(keyExpId(p));
+    meta[p].expiresAt = exp && isDateStr(exp.value) ? exp.value : '';
+  }
+  return {
+    ...settings,
+    provider: $('setProvider').value,
+    keys,
+    keyMeta: meta,
+    models: {
+      groq: $('setModelGroq').value.trim(),
+      gemini: $('setModelGemini').value.trim(),
+      openrouter: $('setModelOpenrouter').value.trim(),
+      custom: ''
+    },
+    customBase: $('setCustomBase').value.trim(),
+    customModel: $('setCustomModel').value.trim(),
+    bingDelayMs: Number($('setDelay').value) || 2200,
+    searchHost: $('setHost').value,
+    theme: $('setTheme').value
+  };
+}
+
+async function persistKey(provider, opts = {}) {
+  const label = KEY_LABELS[provider] || provider;
+  const input = $(keyInputId(provider));
+  const raw = input ? input.value.trim() : '';
+  if (!raw) {
+    if (!opts.silent) toast('Paste a ' + label + ' key first');
+    return false;
+  }
+  const keys = { ...(settings.keys || {}) };
+  const meta = normalizeKeyMeta(settings.keyMeta);
+  const changed = raw !== (keys[provider] || '');
+  keys[provider] = raw;
+  if (changed || !meta[provider].savedAt) {
+    meta[provider].savedAt = localDateStr();
+    meta[provider].lastCheckedAt = '';
+    meta[provider].lastCheckOk = null;
+  }
+  const exp = $(keyExpId(provider));
+  meta[provider].expiresAt = exp && isDateStr(exp.value) ? exp.value : '';
+  const next = { ...settings, keys, keyMeta: meta };
+  const res = await sendMsgRetry({ type: 'setSettings', settings: next });
+  if (!res.ok) {
+    toast('Could not save ' + label + ' key: ' + String(res.error || 'unknown'), 3200);
+    return false;
+  }
+  settings = next;
+  renderKeyStatus(provider);
+  renderKeyWarnings();
+  if (!opts.silent) toast(label + ' key saved permanently on this device');
+  return true;
+}
+
+async function clearKey(provider) {
+  const label = KEY_LABELS[provider] || provider;
+  if (!(settings.keys && settings.keys[provider])) {
+    toast('No ' + label + ' key saved');
+    return;
+  }
+  const btn = document.querySelector('[data-key-clear="' + provider + '"]');
+  if (clearArm.provider !== provider) {
+    clearTimeout(clearArm.timer);
+    document.querySelectorAll('[data-key-clear]').forEach((b) => {
+      b.textContent = '✕';
+      b.title = 'Remove saved key';
+    });
+    clearArm.provider = provider;
+    clearArm.timer = setTimeout(() => {
+      clearArm.provider = '';
+      if (btn) { btn.textContent = '✕'; btn.title = 'Remove saved key'; }
+    }, 3000);
+    if (btn) { btn.textContent = '?'; btn.title = 'Click again to remove'; }
+    toast('Click ✕ again to remove the ' + label + ' key', 2600);
+    return;
+  }
+  clearTimeout(clearArm.timer);
+  clearArm.provider = '';
+  if (btn) { btn.textContent = '✕'; btn.title = 'Remove saved key'; }
+  const keys = { ...(settings.keys || {}), [provider]: '' };
+  const meta = normalizeKeyMeta(settings.keyMeta);
+  meta[provider] = { savedAt: '', expiresAt: '', lastCheckedAt: '', lastCheckOk: null };
+  const next = { ...settings, keys, keyMeta: meta };
+  const res = await sendMsgRetry({ type: 'setSettings', settings: next });
+  if (!res.ok) {
+    toast('Could not clear ' + label + ' key: ' + String(res.error || 'unknown'), 3200);
+    return;
+  }
+  settings = next;
+  const input = $(keyInputId(provider));
+  if (input) input.value = '';
+  const exp = $(keyExpId(provider));
+  if (exp) exp.value = '';
+  renderKeyStatus(provider);
+  renderKeyWarnings();
+  toast(label + ' key removed');
+}
+
 function openSettings() {
   $('setProvider').value = settings.provider || 'groq';
-  $('setKeyGroq').value = (settings.keys && settings.keys.groq) || '';
-  $('setKeyGemini').value = (settings.keys && settings.keys.gemini) || '';
-  $('setKeyOpenrouter').value = (settings.keys && settings.keys.openrouter) || '';
-  $('setKeyHunter').value = (settings.keys && settings.keys.hunter) || '';
+  settings.keyMeta = normalizeKeyMeta(settings.keyMeta);
+  for (const p of KEY_PROVIDERS) {
+    $(keyInputId(p)).value = (settings.keys && settings.keys[p]) || '';
+    $(keyExpId(p)).value = settings.keyMeta[p].expiresAt || '';
+    renderKeyStatus(p);
+  }
+  $('showKeys').checked = false;
+  applyKeyVisibility();
   const models = settings.models || {};
   $('setModelGroq').value = models.groq || '';
   $('setModelGemini').value = models.gemini || '';
@@ -574,29 +768,8 @@ function openSettings() {
 }
 
 async function saveSettings() {
-  const provider = $('setProvider').value;
-  const next = {
-    ...settings,
-    provider: provider,
-    keys: {
-      groq: $('setKeyGroq').value.trim(),
-      gemini: $('setKeyGemini').value.trim(),
-      openrouter: $('setKeyOpenrouter').value.trim(),
-      hunter: $('setKeyHunter').value.trim(),
-      custom: ''
-    },
-    models: {
-      groq: $('setModelGroq').value.trim(),
-      gemini: $('setModelGemini').value.trim(),
-      openrouter: $('setModelOpenrouter').value.trim(),
-      custom: ''
-    },
-    customBase: $('setCustomBase').value.trim(),
-    customModel: $('setCustomModel').value.trim(),
-    bingDelayMs: Number($('setDelay').value) || 2200,
-    searchHost: $('setHost').value,
-    theme: $('setTheme').value
-  };
+  const next = collectFormSettings();
+  const provider = next.provider;
 
   if (provider === 'custom' && next.customBase) {
     try {
@@ -619,15 +792,34 @@ async function saveSettings() {
   }
   settings = next;
   applyTheme();
+  renderKeyWarnings();
   $('settingsModal').classList.add('hidden');
   toast('Settings saved');
 }
 
 async function testKey() {
   const el = $('testResult');
+  const provider = $('setProvider').value;
+  if (provider === 'none') {
+    el.textContent = 'Pick an AI provider first';
+    el.className = 'test-result err';
+    return;
+  }
+  const input = $(keyInputId(provider));
+  if (input && input.value.trim() && input.value.trim() !== ((settings.keys || {})[provider] || '')) {
+    const saved = await persistKey(provider, { silent: true });
+    if (!saved) return;
+  }
   el.textContent = 'Testing…';
   el.className = 'test-result';
-  const res = await sendMsgRetry({ type: 'testAI', provider: $('setProvider').value });
+  const res = await sendMsgRetry({ type: 'testAI', provider });
+  const meta = normalizeKeyMeta(settings.keyMeta);
+  meta[provider].lastCheckedAt = localDateStr();
+  meta[provider].lastCheckOk = !!res.ok;
+  const stored = await sendMsgRetry({ type: 'setSettings', settings: { ...settings, keyMeta: meta } });
+  if (stored.ok) settings.keyMeta = meta;
+  renderKeyStatus(provider);
+  renderKeyWarnings();
   if (res.ok) {
     el.textContent = '✓ ' + res.message;
     el.classList.add('ok');
@@ -692,10 +884,15 @@ function wire() {
   $('btnTheme').addEventListener('click', toggleTheme);
 
   $('settingsModal').addEventListener('click', (ev) => {
+    const saveBtn = ev.target.closest('[data-key-save]');
+    if (saveBtn) { persistKey(saveBtn.dataset.keySave); return; }
+    const clearBtn = ev.target.closest('[data-key-clear]');
+    if (clearBtn) { clearKey(clearBtn.dataset.keyClear); return; }
     if (ev.target === $('settingsModal')) {
       $('settingsModal').classList.add('hidden');
     }
   });
+  $('showKeys').addEventListener('change', applyKeyVisibility);
 }
 
 async function toggleTheme() {
@@ -706,6 +903,12 @@ async function toggleTheme() {
 }
 
 async function init() {
+  if (!extensionContextOk()) {
+    const b = $('swBanner');
+    b.textContent = '⚠ LeadScout must run as a browser extension. Open it from the Chrome/Edge toolbar, not as a file.';
+    b.classList.remove('hidden');
+    return;
+  }
   await loadState();
   applyTheme();
   $('optMode').value = settings.scanMode || 'standard';
@@ -715,6 +918,7 @@ async function init() {
   updateInputCount();
   renderProgress();
   renderResults(true);
+  renderKeyWarnings();
   wire();
   if (job && (job.running || job.paused)) startPolling();
   checkSwHealth();
@@ -730,7 +934,7 @@ async function checkSwHealth() {
     banner.classList.add('hidden');
     return;
   }
-  banner.textContent = '⚠ Background worker failed to start. Fix: chrome://extensions → LeadScout → Remove → "Load unpacked" this folder again (a full reinstall replaces any stale/mixed files). Detail: ' + String(res && res.error ? res.error : 'no response');
+  banner.textContent = '⚠ Background worker failed to start. Fix: ' + extensionsUrl() + ' → LeadScout → Remove → "Load unpacked" this folder again (a full reinstall replaces any stale/mixed files). Detail: ' + String(res && res.error ? res.error : 'no response');
   banner.classList.remove('hidden');
 }
 

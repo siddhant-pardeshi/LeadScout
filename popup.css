@@ -210,6 +210,7 @@ select:focus, .text-input:focus { border-color: var(--accent); }
 }
 .banner.warn { background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.4); color: var(--warn); }
 .banner.err { background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.45); color: var(--err); font-weight: 600; }
+#keyBanner { cursor: pointer; }
 
 .prog-actions { display: flex; gap: 6px; margin-bottom: 8px; }
 
@@ -295,6 +296,39 @@ select:focus, .text-input:focus { border-color: var(--accent); }
 .test-result { font-size: 11px; margin-left: 8px; }
 .test-result.ok { color: var(--ok); }
 .test-result.err { color: var(--err); }
+
+/* --------------------------- API key vault --------------------------- */
+.key-vault {
+  margin: 4px 0 10px; padding: 10px 11px;
+  background: var(--chip); border: 1px solid var(--card-border); border-radius: 12px;
+}
+.key-vault summary {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  cursor: pointer; font-size: 12.5px; font-weight: 700; list-style: none;
+}
+.key-vault summary::-webkit-details-marker { display: none; }
+.kv-hint { font-size: 9.5px; font-weight: 500; color: var(--ok); }
+.kv-help { font-size: 10.3px; color: var(--text-dim); line-height: 1.45; margin: 6px 0; }
+.kv-show { display: flex; align-items: center; gap: 6px; font-size: 10.3px; color: var(--text-dim); margin-bottom: 4px; }
+.key-row { border-top: 1px solid var(--card-border); padding: 8px 0 5px; }
+.key-row:first-of-type { border-top: none; }
+.key-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 5px; }
+.key-name { font-size: 11.3px; font-weight: 600; }
+.key-name em { font-style: normal; font-size: 9.3px; color: var(--text-dim); font-weight: 500; }
+.key-status { font-size: 9.3px; padding: 2px 6px; border-radius: 999px; white-space: nowrap; }
+.key-status.none { background: rgba(148, 163, 184, 0.14); color: var(--text-dim); }
+.key-status.active { background: rgba(52, 211, 153, 0.13); color: var(--ok); }
+.key-status.soon { background: rgba(251, 191, 36, 0.15); color: var(--warn); }
+.key-status.expired { background: rgba(248, 113, 113, 0.15); color: var(--err); }
+.key-line { display: flex; gap: 5px; align-items: center; }
+.key-line .text-input { flex: 1; min-width: 0; }
+.icon-btn.tiny { width: 26px; height: 26px; font-size: 11px; flex: 0 0 auto; }
+.key-exp { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 5px; font-size: 10px; color: var(--text-dim); }
+.key-exp input[type="date"] {
+  width: 138px; padding: 4px 6px; border-radius: 7px;
+  border: 1px solid var(--card-border); background: var(--bg2); color: var(--text);
+  font-size: 10.5px; font-family: inherit;
+}
 
 .delay-val { font-size: 11px; color: var(--text-dim); min-width: 46px; text-align: right; }
 

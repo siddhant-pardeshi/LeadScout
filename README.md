@@ -1,17 +1,18 @@
 <div align="center">
 
-<img src="assets/banner.svg" alt="LeadScout — Bulk LinkedIn Decision-Maker Finder" width="100%">
+<img src="assets/banner.svg" alt="LeadScout — Bulk Decision-Maker Finder" width="100%">
 
 # LeadScout
 
-**Research 50–100 companies in one click. Get decision-makers — current roles, verified profile links, emails — straight into Microsoft Excel as TSV.**
+**Research 50–100 companies in one run. Get decision-makers — current roles, verified profile links, emails — straight into Excel as TSV.**
 
-A Chrome extension that replaces the one-company-at-a-time ChatGPT workflow for B2B lead research.
-Runs 100% locally in your browser · powered by **Microsoft Bing** · AI-optional (free keys) · zero data leaves your machine except your own searches.
+A Chrome / Microsoft Edge extension that replaces the one-company-at-a-time chatbot workflow for B2B lead research.
+Runs in your browser · Bing-powered · works without any API key · free AI keys optional.
 
-[![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/)
-[![Version](https://img.shields.io/badge/version-1.4.1-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
-[![Tests](https://img.shields.io/badge/tests-43%20passing-34D399)](#-testing--quality)
+[![Chrome MV3](https://img.shields.io/badge/Manifest-V3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/)
+[![Edge](https://img.shields.io/badge/Microsoft%20Edge-supported-0078D7?logo=microsoftedge&logoColor=white)](https://www.microsoft.com/edge)
+[![Version](https://img.shields.io/badge/version-1.5.0-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
+[![Tests](https://img.shields.io/badge/tests-50%20passing-34D399)](#-testing--quality)
 [![License](https://img.shields.io/badge/license-MIT-34D399)](LICENSE)
 [![Bing](https://img.shields.io/badge/search-Bing-008373)](https://www.bing.com)
 
@@ -27,208 +28,272 @@ Runs 100% locally in your browser · powered by **Microsoft Bing** · AI-optiona
 <img src="assets/pipeline.svg" alt="How LeadScout works: your list → Bing → LinkedIn pages → AI enrichment → Excel TSV" width="100%">
 </div>
 
-## 🎬 The story in 30 seconds
+## What LeadScout does
 
-You're a business developer. You have **50 companies** to research. The old way:
-open a LinkedIn page → copy a prompt into ChatGPT → wait → copy results → repeat ×50,
-then pray the AI didn't mix Company A's CEO into Company B's sheet.
+You have a list of companies. You need the people who can say yes to AI, software, automation or digital-transformation work.
 
-**LeadScout does all 50 in one run:**
+1. **Paste the list** — LinkedIn company URLs, plain company names, or a mix, one per line.
+2. **LeadScout researches each company separately** — its own Bing searches, its own LinkedIn page read, its own optional AI call. Names cannot bleed from Company A into Company B.
+3. **You get an Excel-ready table** — name, designation, country, company, size, industry, LinkedIn URL, email, status, priority, HQ and more.
 
-1. **Paste** — LinkedIn URLs, plain company names, or a mix — one per line
-2. **It researches each company in complete isolation** — its own Bing searches, its own
-   LinkedIn page read, its own AI call — so names *never* bleed between companies
-3. **It verifies before it shows** — profile URLs only from real search results,
-   current roles only (past roles are dropped), company facts from the live page
-4. **One click → Excel** — a full 14-column TSV lands on your clipboard
+## Why the output is trustworthy
+
+Four rules are enforced in code, not just promised in a prompt:
+
+| Rule | What it means |
+|---|---|
+| **Real URLs only** | A LinkedIn profile link is kept only when it came from a real search result for that company. LeadScout never builds a profile URL from a name. |
+| **AI names must be grounded** | An AI-proposed person is kept only when their name appears in that company's own search results. The role is re-derived from that result — not from the model's claim. Invented names are dropped and counted. |
+| **Current roles only** | `Former`, `Ex-`, `was`, `previously` and dated past roles are dropped or flagged. A past CEO never becomes today's CEO. |
+| **Emails are honest** | Hunter.io-verified addresses are marked verified. Pattern guesses are labelled `estimated — unverified`. With no source, the cell stays empty. |
 
 <div align="center">
 <img src="assets/columns.svg" alt="The Excel output: name, designation, country, company, size, industry, LinkedIn URL, email, status" width="100%">
 </div>
 
-## 🎬 Video walkthrough — every feature, explained
+---
 
-<div align="center">
+## Install
 
-<a href="docs/walkthrough.mp4"><img src="docs/walkthrough-poster.png" alt="LeadScout video walkthrough poster" width="80%"></a>
+### Google Chrome
 
-**▶ [Watch the walkthrough — 4 minutes, with voice-over](docs/walkthrough.mp4)**
+1. Open `chrome://extensions`
+2. Turn on **Developer mode** (top-right)
+3. Click **Load unpacked** → select this folder
+4. Pin **LeadScout** from the puzzle-piece menu
 
-A friendly guided tour of *every* feature: install → bulk input → the research engine →
-current-roles engine → verification → emails → one-click Excel export → background controls →
-free API keys. **Captions:** [`docs/walkthrough.srt`](docs/walkthrough.srt)
+### Microsoft Edge (the browser where Bing is the default)
 
-</div>
+Edge is Chromium-based, so the same build runs unchanged — no separate package, no Chrome-only APIs.
+
+1. Open `edge://extensions`
+2. Turn on **Developer mode** (left sidebar)
+3. Click **Load unpacked** → select this folder
+4. Pin **LeadScout** from the extensions menu
+
+> “Bing browser” usually means Microsoft Edge with Bing as the search engine. Extensions are not supported in the Bing mobile app; install LeadScout in Edge on desktop.
+
+### After installing
+
+- Stay logged into LinkedIn in the same browser profile (the company-page facts are much better).
+- Optional: open ⚙ **Settings → 🔑 API keys** and save a free Groq/Gemini key.
+- Paste companies → **▶ Start research** → **Copy TSV** → paste into Excel.
+
+Standard mode takes about 15–25 seconds per company. The queue runs in the background worker, so you can close the popup and keep browsing.
 
 ---
 
-## ✨ Every feature, explained simply
+## 🔑 API keys — saved permanently, with an expiry date
+
+Stop pasting the same key on every run.
+
+Open **⚙ Settings → 🔑 API keys**:
+
+| Control | What it does |
+|---|---|
+| **Paste + Save** | Saves that one key immediately to `chrome.storage.local`. No need to press “Save settings”. |
+| **Status pill** | Shows `saved · no expiry`, `saved · expires 24 Dec`, or `saved · expired 20 Nov` at a glance. Hover for the full saved date and last check result. |
+| **Expiry / rotation date** | Optional date you choose. LeadScout warns you in the popup **30 days before** it passes, and shows the exact date. |
+| **Show keys** | Reveals all key fields so you can confirm what is stored. |
+| **Test key** | Saves the current field first, then calls the provider and records “last checked”. |
+| **✕ (click twice)** | Removes the saved key from this browser. |
+
+### Why you set the expiry date
+
+Groq, Gemini, OpenRouter and Hunter **do not publish a key-expiry date**. Inventing one would be worse than showing nothing. LeadScout therefore stores:
+
+- **Saved on** — the date you saved the key (set automatically)
+- **Expires / rotate on** — an optional date you control
+- **Last checked** — updated when **Test key** succeeds or fails
+
+If you leave the date empty, the pill says `no expiry` — honest, not a fake date.
+
+### Where the keys live
+
+- Stored in **`chrome.storage.local`** — this browser profile only.
+- Survive browser restarts, extension reloads and extension updates.
+- **Not synced** between Chrome and Edge (they are separate browser profiles). Save once in each browser you use.
+- Removed only when you clear the key, clear extension data, or uninstall the extension.
+- Sent only to the provider you call (as the `Authorization` header). LeadScout has no server and no telemetry.
+- Not additionally encrypted at rest: they sit in the browser profile, protected by your OS account. Use a locked OS account on shared machines.
+
+Existing keys from older versions load automatically; their saved date is recorded the next time you press **Save** for that key.
+
+| Provider | Free key | Used for |
+|---|---|---|
+| **Groq** | [console.groq.com](https://console.groq.com) | fast structuring / enrichment |
+| **Gemini** | [aistudio.google.com](https://aistudio.google.com) | web-grounded recovery for thin results |
+| **OpenRouter** | [openrouter.ai](https://openrouter.ai) | free Llama models |
+| **Hunter.io** | [hunter.io](https://hunter.io) | verified emails (free tier ≈ 25 domain searches/month) |
+| **Custom** | your endpoint | any OpenAI-compatible API |
+
+No key at all? LeadScout still works: Bing extraction only, same TSV, fewer filled facts.
+
+---
+
+## ✨ Every feature, in plain language
 
 ### 🔍 Research engine
 | Feature | What it means for you |
 |---|---|
-| **Bulk input** | Paste 50–100 companies at once — LinkedIn URLs, plain names ("Freshworks"), or mixed lines (`Postman - https://…`). Duplicates removed automatically |
-| **Name→page resolution (3 tiers)** | Typed a company name? LeadScout guesses the LinkedIn page slug and *verifies it by loading the page* (never fabricates), then falls back to scored Bing resolution with recall-friendly matching — "Zoho Corporation" correctly finds the page titled "Zoho" |
-| **Per-company isolation** | Each company gets its own search corpus and its own AI call. The #1 bulk-research bug — companies mixing into each other — is impossible by design |
-| **Deep page scan** | Reads the LinkedIn **`/about/` page** (the data-rich one) for industry, company size, headquarters and website — with retries that ride out LinkedIn's slow rendering, and a guest-mode fallback |
-| **3 scan depths** | Quick (1 search), Standard (2), Deep (4) — from ~10 s to ~40 s per company |
-| **⟳ Refresh all — latest data** | One button re-runs every researched company so names, roles, facts and emails reflect the *live* web right now |
+| **Bulk input** | Paste 50–100 companies at once — URLs, names, or mixed lines (`Postman - https://…`). Duplicates are removed. |
+| **3-tier name resolution** | Typed a name? LeadScout guesses the LinkedIn slug and verifies it by loading the page, then falls back to scored Bing results. A guess is never accepted unless the page name matches. |
+| **Per-company isolation** | Each company gets its own search corpus and AI call. The classic bulk-research bug — Company A's CEO appearing under Company B — is structurally prevented. |
+| **Deep page scan** | Reads LinkedIn's `/about/` page for industry, company size, HQ and website, with retries for slow rendering and a guest-mode fallback. |
+| **3 scan depths** | Quick (1 search), Standard (2), Deep (4) — roughly 10 s to 40 s per company. |
+| **⟳ Refresh all** | Re-runs every company so names, roles, facts and emails reflect the live web now. |
 
-### 👤 People & designations
+### 👤 People and designations
 | Feature | What it means for you |
 |---|---|
-| **Current roles only** | A person is kept only with a **current** role at that company. Past markers ("Former CEO", "was CTO", "Ex-Founder") are dropped — even positionally-aware: "Acme Corp engineer, *previously at Google*" is kept; "*Former* CEO at Acme" is not |
-| **P1–P5 priority ranking** | P1 = C-suite/founders/CTO/CIO/Chief-AI · P2 = heads of Product/Engineering/AI/Digital · down to managers — encoded from the full B2B designation list |
-| **Smart title parsing** | Handles `"Jane Doe - CEO at Acme \| LinkedIn"`, `"Jane Doe CEO at Acme"`, affiliation-only rows and junk rows (`followers`, `on LinkedIn:` posts) |
-| **AI enrichment (optional)** | Groq / Gemini / OpenRouter / any OpenAI-compatible endpoint structures the results and fills company facts. **Corpus-gated:** every AI-proposed person must be named in that company's own search results, and their role is re-derived from that result — invented or out-of-company names are dropped and reported. URLs must exist verbatim in the corpus |
-| **Gemini web-grounding** | When a company yields thin results, Gemini (free tier) performs real Google-search grounding to recover people and facts |
+| **Current roles only** | Past-role markers are dropped, position-aware: “Acme engineer, previously at Google” is kept; “Former CEO at Acme” is not. |
+| **P1–P5 priority** | P1 = C-suite / founders / CTO / CIO / Chief AI; P2 = heads of Product, Engineering, AI, Digital; down to managers. |
+| **Smart title parsing** | Handles `Jane Doe - CEO at Acme | LinkedIn`, `Jane Doe CEO at Acme`, affiliation-only rows and junk rows. |
+| **AI enrichment (optional)** | Groq / Gemini / OpenRouter / custom endpoint. **Corpus-gated:** ungrounded names are dropped; the role comes from the evidence. |
+| **Gemini web grounding** | When a company yields thin results, Gemini performs real Google-search grounding to recover people and facts. |
 
 ### 📧 Emails
 | Feature | What it means for you |
 |---|---|
-| **Hunter.io integration (optional, free)** | Paste a free Hunter key → each person is matched against emails Hunter has verified for that domain (`verified via Hunter.io`), falling back to Hunter's domain-verified pattern |
-| **Pattern estimation (always available)** | No key? `first.last@domain` (+ 5 alternates) is estimated from the company's *verified* website domain and always labeled `estimated — unverified` |
-| **Never fabricated** | No verified source → the cell stays empty. The extension will not invent an address |
+| **Hunter.io (optional)** | Matches each person to verified emails for the company domain, or Hunter's verified domain pattern. |
+| **Pattern estimates** | No Hunter key? `first.last@domain` plus alternates, always labelled `estimated — unverified`. |
+| **Never fabricated** | No verified source → empty cell. LeadScout will not invent an address. |
+
+No second Apollo extension is required. If you already have Apollo, keep it — LeadScout does not need it.
 
 ### 📋 Excel export
 | Feature | What it means for you |
 |---|---|
-| **One-click TSV** | A single hero button copies the full 14-column TSV — paste straight into Excel |
+| **One-click TSV** | Copies the full 14-column table; paste straight into Excel. |
 | **14 columns** | Name · Designation · Country · Company Name · Company Size · Industry · LinkedIn URL · Email · Email Status · Role Currency · Priority · Verification · HQ · Company Page |
-| **Core 7-column mode** | Matches the classic research template exactly (`Name, Designation, Country, Company Name, Company Size, Industry, LinkedIn URL`) |
-| **Filter-aware export** | Filter to C-Suite or Verified-only, then copy *exactly that* |
-| **.TSV / .CSV downloads** | CSV ships with a UTF-8 BOM so names like "José García" open perfectly in Excel |
+| **Core 7-column mode** | Exactly the classic research template: Name, Designation, Country, Company, Size, Industry, LinkedIn URL. |
+| **Filter-aware export** | Filter to C-Suite or Verified-only, then copy exactly that. |
+| **TSV / CSV download** | CSV includes a UTF-8 BOM so “José García” opens correctly in Excel. |
 
-### 🧭 Verification policy — enforced in code, not a promise
-| Label | Meaning |
-|---|---|
-| 🟢 **Verified** | LinkedIn profile URL came from a real Bing result or Gemini citation for *that specific company* — never constructed |
-| 🟢 **CURRENT** | Role at this company is title-verified |
-| 🟡 **SNIPPET** | Company seen in the snippet, no past-role markers |
-| 🟡 **Unverified** | Real person from search snippets, no pinned profile URL |
-| 🔴 **PAST?** | Contradictory signals — shown for manual review, ranked last |
-| 🔵 `estimated` | Email is a pattern guess — verify before outreach |
-
-### 🎛 Comfort features
-- Live progress with stat tiles (People / Verified / Companies / Remaining) and ETA
-- Pause / Resume / Stop / **Retry failed** / **Refresh all**
-- Bing captcha? LeadScout **pauses itself**, notifies you, and resumes after you solve it
-- Survives Chrome killing the background worker — the queue auto-resumes
-- Dark & light themes, animated UI, full-page results view with filters
-- AI **model ids are editable** in Settings — when a provider rotates models, you fix it in 5 seconds, no reinstall
+### 🎛 Queue and comfort
+- Live progress, people/verified/company counts and ETA.
+- Pause / Resume / Stop / **Retry failed** / **Refresh all**.
+- Bing captcha? LeadScout pauses, notifies you, and resumes after you solve it.
+- Chrome/Edge kills the background worker? The queue resumes automatically, and a health banner tells you if a reload is needed.
+- Dark and light themes; full-page results view with filters.
 
 ---
 
-## 🚀 Install in 2 minutes
+## 🧭 Verification labels
 
-1. Download/clone this repo
-2. Chrome → `chrome://extensions` → enable **Developer mode** (top-right)
-3. **Load unpacked** → select the repo folder
-4. Pin **LeadScout** from the puzzle-piece menu
-5. *(Optional but recommended)* ⚙ → paste a free API key (below) → **Test key** → Save
-6. Log into LinkedIn in the same Chrome profile → paste companies → **▶ Start research**
+| Label | Meaning |
+|---|---|
+| 🟢 **Verified** | The LinkedIn URL came from a real search result or Gemini citation for that company — never constructed. |
+| 🟢 **CURRENT** | The role at this company is title-verified. |
+| 🟡 **SNIPPET** | The company appears in the snippet and there are no past-role markers. |
+| 🟡 **Unverified** | A real person from search results, but no pinned profile URL. |
+| 🔴 **PAST?** | Contradictory signals — shown for manual review, ranked last. |
+| 🔵 `estimated` | Email is a pattern guess — verify before outreach. |
 
-> Standard mode ≈ 15–25 s per company, so 100 companies ≈ 25–40 minutes. The queue runs in the background — close the popup, keep the browser open.
+---
 
-## 🔑 Free API keys (all optional)
+## 🌐 Browser compatibility
 
-| Key | Get it free | What it adds |
+| Browser | Status | Notes |
 |---|---|---|
-| **Groq** *(default AI)* | [console.groq.com](https://console.groq.com) | Fast structuring + fact enrichment |
-| **Gemini** | [aistudio.google.com](https://aistudio.google.com) | Adds real **Google-search grounding** for weak results |
-| **OpenRouter** | [openrouter.ai](https://openrouter.ai) | Free Llama models |
-| **Hunter.io** | [hunter.io](https://hunter.io) | **Real emails** — 25 verified domain searches/month |
+| **Google Chrome 116+** | ✅ Supported | Primary target |
+| **Microsoft Edge 116+** | ✅ Supported | Same MV3 build; `edge://extensions` for loading |
+| **Brave / Opera (Chromium)** | ✅ Expected to work | Same extension APIs |
+| **Bing mobile app** | ❌ Not applicable | Does not run desktop extensions |
 
-No keys at all? LeadScout still works — Bing extraction only, same TSV, just fewer filled facts.
+What was done for Edge/Bing compatibility:
 
-## 🧪 Testing & quality
+- No Chrome-only APIs: only `chrome.storage`, `tabs`, `scripting`, `alarms`, `notifications`, `permissions`, `runtime`, `action`.
+- Manifest cleaned for store compatibility: short store-safe name, 120-character description, `homepage_url`, no Chrome-only minimum-version gate.
+- Recovery instructions detect Edge and point to `edge://extensions` instead of `chrome://extensions`.
+- A context guard explains what to do if the popup is opened outside an extension context.
+- The whole flow was smoke-tested in Edge (load, service worker, popup, key save, reload persistence, expiry warning, clear).
 
-- **43 unit tests** covering input parsing, Bing-redirect decoding, person-title extraction,
-  company matching, the 3-tier resolver, role-currency logic, the AI corpus-grounding gate,
-  Hunter matching and TSV/CSV builders
-  ```bash
-  node tools/test.mjs
-  ```
-- **Evidence evaluation** — a local verifier that only accepts role claims backed by cited,
-  dated sources (it abstains instead of guessing):
-  ```bash
-  node tools/eval-evidence.mjs
-  node tools/live-eval-evidence.mjs --offline
-  ```
-- DOM ids ↔ JS, imports ↔ exports, manifest JSON — cross-checked in CI-style validation
-- Security: SSRF-guarded endpoints (localhost/private ranges refused), scheme-checked links,
-  DOM-API rendering (no `innerHTML`), keys stored only in `chrome.storage.local`
+---
+
+## 🔒 Privacy and responsible use
+
+- No LeadScout server, no analytics, no account.
+- Searches go to Bing; company pages to LinkedIn; AI requests to the provider whose key you saved; Hunter requests to Hunter.
+- Keys never leave your browser except as authentication to their own provider.
+- LeadScout reads **public search results and public pages you can already see**, at human-like pace, through your own session. It does not mass-scrape employee lists.
+- Keep volumes moderate (the built-in pacing exists for a reason) and follow local privacy law (GDPR/DPDP/etc.) when storing or contacting people.
+
+---
 
 ## 🏗 Architecture
 
 ```
 LeadScout/
-├── manifest.json        Chrome MV3 config
+├── manifest.json        Chrome/Edge MV3 config
 ├── background.js        queue engine · Bing/LinkedIn readers · pipeline · rate limiting
-├── popup.html/.css/.js  main UI (input, progress, filters, exports, settings)
+├── popup.html/.css/.js  main UI · key vault · progress · filters · exports · settings
 ├── results.html/.js     full-page results view
 ├── lib/
 │   ├── parse.js         pure logic: parsing, resolver, role-currency, TSV/CSV  ← unit-tested
-│   ├── rank.js          designation → category/priority engine                  ← unit-tested
-│   ├── ai.js            Groq/Gemini/OpenRouter adapters + SSRF-safe URLs
-│   ├── verify-lead.js   evidence verifier: cited, dated role claims only
-│   ├── hunter.js        Hunter.io domain-search client
+│   ├── keys.js          key metadata: save dates, expiry math, masking        ← unit-tested
+│   ├── platform.js      Chrome/Edge detection and context guard
+│   ├── rank.js          designation → category/priority                       ← unit-tested
+│   ├── ai.js            provider adapters + SSRF-safe URLs
+│   ├── verify-lead.js   evidence verifier (cited + dated claims)
+│   ├── hunter.js        Hunter.io client
 │   └── extract.js       DOM extractors injected into Bing/LinkedIn pages
-├── assets/              animated SVG artwork (SMIL — the animations you're seeing)
-└── tools/               test suite + icon generator
+├── assets/              animated SVG artwork
+└── tools/               tests · evidence evaluation · icon/QA helpers
 ```
 
-## ⏱ Timing
+Key invariants live in code: profile URLs from real results, AI names grounded in the company corpus, past roles dropped, estimated emails labelled.
 
-| Mode | Searches / company | ≈ time / company | 100 companies |
-|---|---|---|---|
-| Quick | 1 | 8–12 s | ~15–20 min |
-| **Standard** | 2 | 15–25 s | ~25–40 min |
-| Deep | 4 | 25–40 s | ~50–65 min |
+---
+
+## 🧪 Testing and quality
+
+```bash
+node tools/test.mjs                  # 50 unit tests + ESM link check
+node tools/diag_linkcheck.mjs        # standalone import-graph check
+node tools/eval-evidence.mjs         # evidence-verifier smoke test
+node tools/live-eval-evidence.mjs --offline   # 11-claim comparison
+```
+
+The suite covers input parsing, Bing redirect decoding, title extraction, company matching, the 3-tier resolver, role-currency logic, the AI corpus-grounding gate, key/expiry math, Hunter matching and TSV/CSV builders.
+
+---
 
 ## ❓ Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| "Bing needs human verification" | Open any Bing tab, solve the check, click **Resume** |
-| LinkedIn facts empty | Stay logged into LinkedIn; keep *Read LinkedIn pages* ON |
-| "model not found" from AI | ⚙ → AI models → set the provider's current model id |
-| A company needs manual review | Too few public results — try **Deep** mode or the exact LinkedIn URL |
+| “Background worker failed to start” / status 15 | Open `chrome://extensions` or `edge://extensions` → remove LeadScout → **Load unpacked** again |
+| Keys seem missing | Check you are in the same browser profile; Chrome and Edge store separately. Save once per browser. |
+| Expiry banner appears | Click it → update or clear the key in Settings → API keys |
+| “Bing needs human verification” | Open any Bing tab, solve the check, click **Resume** |
+| LinkedIn facts empty | Stay logged into LinkedIn; keep **Read LinkedIn pages** on |
+| “model not found” | Settings → AI models → set the provider's current model id |
+| A company needs manual review | Too few public results — try **Deep** mode or paste the exact LinkedIn URL |
 
-## 🛡 Responsible use
-
-LeadScout reads **public search results and public pages you can already see**, at human-like
-pace, through your own session. It deliberately does not mass-scrape employee lists. Keep volumes
-moderate (the built-in pacing exists for this), and comply with local privacy law (GDPR/DPDP…)
-when storing or contacting people. Emails are pattern estimates unless Hunter-verified — confirm
-before first contact.
+---
 
 ## 📜 Changelog
 
 | Version | Highlights |
 |---|---|
-| **1.4.1** | Service-worker recovery (the "status code: 15" dead-end now self-heals + shows a fix banner), Gemini model-id override honored in path/test, **AI corpus-grounding gate** (ungrounded AI names dropped, roles re-derived from evidence), evidence verifier + 11-claim evaluation runner |
-| **1.4.0** | Security (scheme-guarded links), render dirty-checks (no UI lag), worker-tab cleanup, **⟳ Refresh all**, AI model overrides, Hunter pattern fix, directory-handle filter |
-| 1.3.0 | **Current roles only** (Role Currency engine), Hunter.io real emails, one-click 14-column TSV, filter-aware exports |
-| 1.2.0 | 3-tier name→page resolver, JSON-LD/`og:` fallbacks, `/about/` deep scan, UI redesign |
-| 1.1.0 | Self-contained extractors, Bing consent retries, precision title parsing, size-from-snippets |
-| 1.0.0 | First release: bulk queue, Bing SERP people extraction, TSV export |
+| **1.5.0** | **Persistent API key vault** with saved/expiry dates, per-key save/clear, show/hide, test-and-record; expiry warning banner; Microsoft Edge/Bing compatibility pass; store-safe manifest; custom-endpoint key fixed |
+| **1.4.1** | Service-worker recovery (no more “status code 15” dead-end), Gemini model-id override, AI corpus-grounding gate, evidence verifier + evaluation runner |
+| **1.4.0** | Scheme-guarded links, render dirty-checks, worker-tab cleanup, **⟳ Refresh all**, AI model overrides, Hunter pattern fix |
+| **1.3.0** | Current roles only, Hunter.io emails, 14-column TSV, filter-aware exports |
+| **1.2.0** | 3-tier name resolver, JSON-LD/`og:` fallbacks, `/about/` scan, UI redesign |
+| **1.1.0** | Self-contained extractors, Bing consent retries, precision title parsing |
+| **1.0.0** | First release: bulk queue, Bing SERP extraction, TSV export |
 
 <div align="center">
 <img src="assets/divider.svg" width="100%">
 </div>
 
 <div align="center">
-<img src="assets/footer-cta.svg" alt="Get started in 2 minutes — typing install terminal, checklist, feature ticker" width="100%">
-</div>
 
-<div align="center">
-
-### 🎥 Prefer watching? [▶ Play the 4-minute walkthrough](docs/walkthrough.mp4)
+### 🎥 [Watch the 4-minute walkthrough](docs/walkthrough.mp4)
 
 **Built by [siddhant-pardeshi](https://github.com/siddhant-pardeshi)**
-
-⭐ Star this repo if it saved you an afternoon of copy-pasting — it genuinely helps.
 
 MIT © 2026 — see [LICENSE](LICENSE)
 

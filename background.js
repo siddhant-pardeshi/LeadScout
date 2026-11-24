@@ -12,6 +12,7 @@
 // human-like pacing; captcha walls pause the queue for manual handling.
 
 import { DEFAULT_SETTINGS, PROVIDERS } from './lib/parse.js';
+import { normalizeKeyMeta } from './lib/keys.js';
 import {
   slugFromUrl, titleCaseSlug, decodeBingUrl, parseProfileTitle, linkedinHandle,
   isLinkedInProfile, companyMatch, companyMatchPartial, emailFor, domainFromWebsite,
@@ -19,7 +20,7 @@ import {
   roleCurrency, matchHunterEmail, cell, nameEvidence
 } from './lib/parse.js';
 import { classifyDesignation, seniorityBonus } from './lib/rank.js';
-import { aiResearch } from './lib/ai.js';
+import { aiResearch, aiTestKey } from './lib/ai.js';
 import { hunterDomainSearch } from './lib/hunter.js';
 import { extractBingResults, extractLinkedInCompany } from './lib/extract.js';
 
@@ -44,7 +45,11 @@ function persist() {
 }
 async function loadAll() {
   const st = await chrome.storage.local.get(['settings', 'job']);
-  if (st.settings) SETTINGS = { ...DEFAULT_SETTINGS, ...st.settings, keys: { ...DEFAULT_SETTINGS.keys, ...(st.settings.keys || {}) } };
+  if (st.settings) SETTINGS = {
+    ...DEFAULT_SETTINGS, ...st.settings,
+    keys: { ...DEFAULT_SETTINGS.keys, ...(st.settings.keys || {}) },
+    keyMeta: normalizeKeyMeta(st.settings.keyMeta)
+  };
   if (st.job) S.job = { ...S.job, ...st.job };
 }
 async function saveSettings() {
@@ -511,7 +516,9 @@ async function researchCompany(item, idx) {
   // ---- 4. AI enrichment ----------------------------------------------------
   let aiNote = '';
   const prov = SETTINGS.provider || 'none';
-  const hasKey = !!(SETTINGS.keys && (SETTINGS.keys[prov] || (prov === 'custom' && SETTINGS.customBase)));
+  const hasKey = prov === 'custom'
+    ? !!(SETTINGS.keys && SETTINGS.keys.custom && SETTINGS.customBase)
+    : !!(SETTINGS.keys && SETTINGS.keys[prov]);
   // Grounded research helps twice: when people are scarce AND when the
   // LinkedIn page was walled and company facts are still missing (RC7).
   const groundedCandidate = prov === 'gemini' && hasKey &&
@@ -659,7 +666,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     try {
       if (msg.type === 'ping') {
         // liveness probe from the popup — also confirms module state loaded
-        sendResponse({ ok: true, version: '1.4.1' });
+        sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
       } else if (msg.type === 'start') {
         await loadAll();
         const items = (msg.items || []).map((it, i) => ({
@@ -727,7 +734,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await loadAll();
         sendResponse({ ok: true, settings: SETTINGS });
       } else if (msg.type === 'setSettings') {
-        SETTINGS = { ...DEFAULT_SETTINGS, ...msg.settings, keys: { ...DEFAULT_SETTINGS.keys, ...(msg.settings.keys || {}) } };
+        const incomingMeta = msg.settings.keyMeta !== undefined
+          ? normalizeKeyMeta(msg.settings.keyMeta)
+          : normalizeKeyMeta(SETTINGS.keyMeta);
+        SETTINGS = {
+          ...DEFAULT_SETTINGS, ...msg.settings,
+          keys: { ...DEFAULT_SETTINGS.keys, ...(msg.settings.keys || {}) },
+          keyMeta: incomingMeta
+        };
         await saveSettings();
         sendResponse({ ok: true });
       } else if (msg.type === 'addCurrentPage') {
@@ -756,7 +770,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           }
         }
       } else if (msg.type === 'testAI') {
-        const { aiTestKey } = await import('./lib/ai.js');
         await loadAll();
         const out = await aiTestKey(msg.provider, SETTINGS);
         sendResponse({ ok: true, message: out });
