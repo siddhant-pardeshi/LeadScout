@@ -88,6 +88,20 @@ function tdText(text, cls) {
   return td;
 }
 
+function companyCell(comp) {
+  const td = tdText(comp.name || comp.input || '', 'co');
+  if (comp.url) {
+    const link = linkEl(comp.url, '↗');
+    if (link.tagName === 'A') {
+      link.className = 'co-link';
+      link.title = 'Company LinkedIn page';
+    }
+    td.appendChild(document.createTextNode(' '));
+    td.appendChild(link);
+  }
+  return td;
+}
+
 function linkEl(href, txt) {
   // v1.4 security: only real web links become anchors — never javascript:/data:
   if (!/^https?:\/\//i.test(String(href || ''))) {
@@ -172,7 +186,7 @@ function render(force) {
       reason.title = review.title;
       tr.appendChild(reason);
       tr.appendChild(tdText(r.comp.country || '', 'ds'));
-      tr.appendChild(tdText(r.comp.name || r.comp.input, 'co'));
+      tr.appendChild(companyCell(r.comp));
       tr.appendChild(tdText(r.comp.size || '', 'ds'));
       tr.appendChild(tdText(r.comp.industry || '', 'ds'));
       const tdL = document.createElement('td');
@@ -199,8 +213,9 @@ function render(force) {
     tr.appendChild(tdD);
 
     tr.appendChild(tdText(c.country || '', 'ds'));
-    tr.appendChild(tdText(c.name || c.input, 'co'));
-    if (c.aiNote) tr.lastChild.title = c.aiNote;
+    const tdCo = companyCell(c);
+    if (c.aiNote) tdCo.title = c.aiNote;
+    tr.appendChild(tdCo);
     tr.appendChild(tdText(c.size || '', 'ds'));
     tr.appendChild(tdText(c.industry || '', 'ds'));
 

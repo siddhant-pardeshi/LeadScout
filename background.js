@@ -18,7 +18,8 @@ import {
   isLinkedInProfile, companyMatch, companyMatchPartial, emailFor, domainFromWebsite,
   extractSizeFromText, overlapTokens, kebabName, slugScore, looseResolveMatch,
   roleCurrency, matchHunterEmail, cell, nameEvidence, officialLeadershipCandidate,
-  inferWebsiteFromSerp, officialPageCandidate, classifyOutcome, domainMatchesCompany, websiteCandidates
+  inferWebsiteFromSerp, officialPageCandidate, classifyOutcome, domainMatchesCompany, websiteCandidates,
+  companyFactsFromPage
 } from './lib/parse.js';
 import { classifyDesignation, seniorityBonus } from './lib/rank.js';
 import { aiResearch, aiTestKey } from './lib/ai.js';
@@ -505,11 +506,10 @@ function countryFromHq(hq) {
   const parts = String(hq).split(',').map(s => s.trim()).filter(Boolean);
   if (!parts.length) return '';
   const last = parts[parts.length - 1];
-  // A bare city name is not a country — unless it IS a known country name
-  if (parts.length === 1) {
-    return KNOWN_COUNTRIES.has(last.toLowerCase()) ? last : '';
-  }
-  return last;
+  // Only a recognised country may leave this function. A truncated address tail
+  // ("… Kalpataru Inspire, Off") is not a country, and guessing one would break
+  // the no-invented-facts rule.
+  return KNOWN_COUNTRIES.has(last.toLowerCase()) ? last : '';
 }
 
 // Precision/recall helpers for company resolution (slugScore, overlapTokens,
@@ -584,9 +584,16 @@ async function readOfficialLeadership(website, companyName) {
   const domain = domainFromWebsite(website);
   const stats = {
     used: true, pages: 0, candidates: 0, accepted: 0, blocked: 0, errors: 0, states: {},
-    rejected: { no_explicit_current_leader: 0 }, visited: [], website: ''
+    rejected: { no_explicit_current_leader: 0 }, visited: [], website: '',
+    facts: { employees: '', industry: '', hq: '', country: '', linkedinUrl: '' }
   };
   const people = [];
+  const mergePageFacts = (out) => {
+    const pageFacts = companyFactsFromPage(out.page || { title: out.title || '', description: '', text: '' });
+    for (const key of ['employees', 'industry', 'hq', 'country', 'linkedinUrl']) {
+      if (!stats.facts[key] && pageFacts[key]) stats.facts[key] = pageFacts[key];
+    }
+  };
   if (!domain) return { people, stats };
   const proto = /^http:\/\//i.test(String(website)) ? 'http:' : 'https:';
   const base = proto + '//' + domain;
@@ -644,6 +651,7 @@ async function readOfficialLeadership(website, companyName) {
           stats.website = finalUrl;
         }
       } catch (e) { /* keep the original website */ }
+      mergePageFacts(out);
       const pageCandidates = Array.isArray(out.candidates) ? out.candidates : [];
       stats.candidates += pageCandidates.length;
       let pageAccepted = 0;
@@ -686,6 +694,40 @@ async function readOfficialLeadership(website, companyName) {
         .map(p => base + p)
         .filter(u => !seen.has(u.replace(/#.*$/, '').replace(/\/+$/, '')));
       queue.unshift(...extraPaths);
+    }
+  }
+  // If the leadership page did not state company size/headquarters, make a
+  // bounded pass over the company's own about/company pages. This also runs
+  // when no leadership page was readable, but not when the site refused us
+  // entirely. Facts are merged only when missing and never overwrite
+  // LinkedIn-verified values.
+  if ((!stats.facts.employees || !stats.facts.hq) && stats.pages >= stats.blocked) {
+    let factBase = base;
+    try { factBase = new URL(officialWebsite).origin; } catch (e) { /* keep base */ }
+    const factPaths = stats.facts.hq
+      ? ['/about-us', '/investors', '/about', '/company', '/who-we-are', '/investor-relations']
+      // A contact page states the registered/corporate address far more often
+      // than a marketing "about" page does, so try it first when HQ is missing.
+      : ['/contact-us', '/contact', '/about-us', '/about', '/investors'];
+    let attempts = 0;
+    for (const p of factPaths) {
+      if (attempts >= 4 || stats.pages >= 16) break;
+      if (stats.facts.employees && stats.facts.hq) break;
+      if (!S.job.running || S.job.paused) throw new Error('paused');
+      const url = factBase + p;
+      const norm = String(url).replace(/#.*$/, '').replace(/\/+$/, '');
+      if (seen.has(norm)) continue;
+      seen.add(norm);
+      attempts++;
+      try {
+        const tabId = await ensureTab('official', url);
+        await waitForTabLoad(tabId, 18000);
+        await sleep(700);
+        stats.pages++;
+        const frames = await chrome.scripting.executeScript({ target: { tabId }, func: extractOfficialLeadership });
+        const out = frames && frames[0] && frames[0].result;
+        if (out && !out.blocked) mergePageFacts(out);
+      } catch (e) { /* best-effort facts */ }
     }
   }
   return { people, stats };
@@ -877,6 +919,14 @@ async function researchCompany(item, idx) {
     comp.discovery.official.used = true;
     const scan = await readOfficialLeadership(comp.website, companyName());
     if (scan.stats.website) { comp.website = scan.stats.website; comp.websiteSource = 'search'; }
+    const facts = scan.stats.facts || {};
+    let officialFact = false;
+    if (!comp.size && facts.employees) { comp.size = facts.employees; officialFact = true; }
+    if (!comp.industry && facts.industry) { comp.industry = facts.industry; officialFact = true; }
+    if (!comp.hq && facts.hq) { comp.hq = facts.hq; officialFact = true; }
+    if (!comp.country && facts.country) { comp.country = facts.country; officialFact = true; }
+    if (!comp.url && facts.linkedinUrl) { comp.url = facts.linkedinUrl; comp.linkedinSource = 'official-site'; }
+    if (officialFact && comp.factSource === 'none') comp.factSource = 'official';
     comp.discovery.official.pages = scan.stats.pages;
     comp.discovery.official.candidates = scan.stats.candidates;
     comp.discovery.official.accepted = scan.stats.accepted;

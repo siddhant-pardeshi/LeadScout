@@ -7,7 +7,7 @@ import {
   buildTSV, buildCSV, extractSizeFromText, overlapTokens, kebabName, slugScore,
   looseResolveMatch, roleCurrency, matchHunterEmail, cell, exportCell, nameEvidence,
   officialLeadershipCandidate, inferWebsiteFromSerp, officialPageCandidate, classifyOutcome,
-  domainMatchesCompany, websiteCandidates
+  domainMatchesCompany, websiteCandidates, companyFactsFromPage
 } from '../lib/parse.js';
 import { classifyDesignation, seniorityBonus } from '../lib/rank.js';
 import { extractJson, assertSafeUrl } from '../lib/ai.js';
@@ -363,6 +363,50 @@ T('officialPageCandidate: legal-name domain trust and homepage leadership cards'
   }, 'https://www.twilio.com/', 'Twilio'), null);
 });
 
+T('companyFactsFromPage: size, industry, HQ, country and LinkedIn URL', () => {
+  const red = companyFactsFromPage({
+    title: 'Redington Board of Directors | Leadership & Governance',
+    description: 'Redington Group is a global IT services and technology solution provider.',
+    text: 'Redington Group has over 5,000 employees. Registered office: Chennai, India.',
+    linkedinUrl: 'https://www.linkedin.com/company/redington/?trk=footer'
+  });
+  assert.equal(red.employees, '5,000+ employees');
+  assert.equal(red.industry, 'IT Services');
+  assert.equal(red.hq, 'Chennai, India');
+  assert.equal(red.country, 'India');
+  assert.equal(red.linkedinUrl, 'https://www.linkedin.com/company/redington/');
+  const lup = companyFactsFromPage({
+    title: 'Our Leadership Team | Lupin Global Pharmaceuticals',
+    text: 'Lupin has over 20,000 employees worldwide.',
+    structured: {
+      numberOfEmployees: { value: 20000, maxValue: 50000 },
+      industry: 'Pharmaceuticals',
+      address: { addressLocality: 'Mumbai', addressRegion: 'Maharashtra', addressCountry: 'IN' },
+      sameAs: ['https://www.linkedin.com/company/lupin/']
+    }
+  });
+  assert.equal(lup.employees, '20,000–50,000 employees');
+  assert.equal(lup.industry, 'Pharmaceuticals');
+  assert.equal(lup.hq, 'Mumbai, Maharashtra, India');
+  assert.equal(lup.linkedinUrl, 'https://www.linkedin.com/company/lupin/');
+  assert.equal(companyFactsFromPage({ text: 'Welspun has 40000+ employees.' }).employees, '40,000+ employees');
+  // Never invent a "+" the source did not print.
+  assert.equal(companyFactsFromPage({ text: 'The company employs 500 employees.' }).employees, '500 employees');
+  assert.equal(companyFactsFromPage({ text: 'About 1,200 people work here.' }).employees, '1,200 employees');
+  assert.equal(companyFactsFromPage({ text: 'A renewable energy company.' }).industry, 'Renewable Energy');
+  const timeline = companyFactsFromPage({ text: 'Registered office: Chennai 2021 The acquisition of Brightstar in Turkey' });
+  assert.ok(!/acquisition/i.test(timeline.hq));
+  // A prose address is cut at the country it names, never left as a street fragment.
+  const prose = companyFactsFromPage({ text: 'Registered office: Lupin Limited, 3rd Floor, Kalpataru Inspire, Off Western Express Highway, Mumbai 400055, India.' });
+  assert.ok(/India$/.test(prose.hq), 'hq should end with the named country: ' + prose.hq);
+  assert.equal(prose.country, 'India');
+  // A cut-off address loses its dangling preposition instead of reporting "Off".
+  const cut = companyFactsFromPage({ text: 'Registered office: Lupin Limited, 3rd Floor, Kalpataru Inspire, Off' });
+  assert.equal(cut.hq, 'Lupin Limited, 3rd Floor, Kalpataru Inspire');
+  // A legal name after "Registered office:" is not an address.
+  assert.equal(companyFactsFromPage({ text: 'Registered office: Sun Pharmaceutical Industries Ltd' }).hq, '');
+});
+
 T('officialPageCandidate: leadership yes, external board role and lookalike no', () => {
   const site = 'https://acme.example';
   const lead = officialPageCandidate({
@@ -635,7 +679,7 @@ T('buildTSV applies spreadsheet formula protection at export time', () => {
 
 T('buildTSV: full export carries official evidence without changing core URL semantics', () => {
   const comps = [{
-    name: 'Acme Corp', website: 'https://acme.example', people: [{
+    name: 'Acme Corp', website: 'https://acme.example', url: 'https://www.linkedin.com/company/acme/', people: [{
       name: 'Asha Shah', designation: 'Chief Technology Officer', url: '',
       evidenceUrl: 'https://acme.example/leadership', sourceType: 'official',
       verification: 'Official company source', currentEmployer: 'official',
@@ -647,6 +691,7 @@ T('buildTSV: full export carries official evidence without changing core URL sem
   assert.match(full.split('\n')[0], /LinkedIn URL/);
   const row = full.split('\n')[1].split('\t');
   assert.equal(row[6], '');
+  assert.equal(row[13], 'https://www.linkedin.com/company/acme/');
   assert.equal(row[14], 'https://acme.example/leadership');
   assert.equal(row[15], 'Official company source');
   assert.match(full, /Official company source/);
@@ -846,6 +891,7 @@ T('buildTSV v1.3: 16 columns incl. Role Currency, HQ and evidence', () => {
   assert.equal(head.length, 16);
   assert.equal(head[9], 'Role Currency');
   assert.equal(head[12], 'HQ');
+  assert.equal(head[13], 'Company LinkedIn URL');
   assert.equal(head[14], 'Evidence URL');
   assert.equal(head[15], 'Source Type');
   const row = full.split('\n')[1].split('\t');

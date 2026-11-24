@@ -11,8 +11,8 @@ Runs in your browser · Bing + company-owned pages · works without any API key 
 
 [![Chrome MV3](https://img.shields.io/badge/Manifest-V3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/)
 [![Edge](https://img.shields.io/badge/Microsoft%20Edge-supported-0078D7?logo=microsoftedge&logoColor=white)](https://www.microsoft.com/edge)
-[![Version](https://img.shields.io/badge/version-1.8.0-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
-[![Tests](https://img.shields.io/badge/tests-69%20passing-34D399)](#-testing--quality)
+[![Version](https://img.shields.io/badge/version-1.9.0-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
+[![Tests](https://img.shields.io/badge/tests-70%20passing-34D399)](#-testing--quality)
 [![License](https://img.shields.io/badge/license-MIT-34D399)](LICENSE)
 [![Bing](https://img.shields.io/badge/search-Bing-008373)](https://www.bing.com)
 
@@ -166,7 +166,7 @@ No second Apollo extension is required. If you already have Apollo, keep it — 
 | Feature | What it means for you |
 |---|---|
 | **One-click TSV** | Copies the full 16-column table; paste straight into Excel. |
-| **16 columns** | Name · Designation · Country · Company Name · Company Size · Industry · LinkedIn URL · Email · Email Status · Role Currency · Priority · Verification · HQ · Company Page · **Evidence URL** · **Source Type**. |
+| **16 columns** | Name · Designation · Country · Company Name · Company Size · Industry · LinkedIn URL · Email · Email Status · Role Currency · Priority · Verification · HQ · **Company LinkedIn URL** · **Evidence URL** · **Source Type**. The company URL is read from the company's own site (footer/about) when LinkedIn is walled — it is never constructed from a name. |
 | **Core 7-column mode** | Exactly the classic research template: Name, Designation, Country, Company, Size, Industry, LinkedIn URL. |
 | **Filter-aware export** | Filter to C-Suite or Verified-only, then copy exactly that. |
 | **TSV / CSV download** | CSV includes a UTF-8 BOM so “José García” opens correctly in Excel. |
@@ -254,7 +254,7 @@ Key invariants live in code: profile URLs from real results, AI names grounded i
 ## 🧪 Testing and quality
 
 ```bash
-node tools/test.mjs                  # 69 deterministic checks + MV3/ESM smoke tests
+node tools/test.mjs                  # 70 deterministic checks + MV3/ESM smoke tests
 node tools/diag_linkcheck.mjs        # standalone import-graph check
 node tools/eval-evidence.mjs         # evidence-verifier smoke test
 node tools/live-eval-evidence.mjs --offline   # 11-claim comparison
@@ -296,6 +296,7 @@ The suite covers input parsing, Bing redirect decoding, title extraction, compan
 
 | Version | Highlights |
 |---|---|
+| **1.9.0** | Company facts from official pages (`companyFactsFromPage`: size, industry, HQ, country, LinkedIn URL) merged from leadership/about/investor pages — never overwriting LinkedIn-verified values; explicit **Company LinkedIn URL** column in the 16-column export plus a link arrow on every company cell; authwall "Join LinkedIn" title rejection; cinematic dark visual system (aurora, grid drift, gradient wordmark, card rise, button sheen, glowing progress) with a light theme and reduced-motion fallback; full-width fixed-layout tables (no clipped columns). Live-verified: Redington 4,025+ employees from its investor page. |
 | **1.8.0** | Indian/enterprise recovery: company-domain probing (`jiobp.com`, `sunpharma.com`), canonical redirects (`redington.group` → `redingtongroup.com`), `/about-us` + `/know-us` + board paths, homepage leadership cards, legal-name domain trust, authwall title guard; live-verified Lupin 12, Redington 8, Sun 8, Welspun 4. |
 | **1.7.1** | Removed the redundant optional `https://*/*` host permission (already covered by required host access); added a manifest regression test. |
 | **1.7.0** | Direct company-site leadership recovery (JSON-LD, heading pairs, cards), website inference when LinkedIn is walled, Cloudflare/authwall detection, source-blocked/no-profile outcomes, evidence URL + source columns, broad company-site host access; live-verified on Twilio, HubSpot and Freshworks. |
