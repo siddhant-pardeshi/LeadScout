@@ -280,6 +280,7 @@ The suite covers input parsing, Bing redirect decoding, title extraction, compan
 | **Search blocked** | Open the LeadScout Bing tab, complete Bing's consent or human-verification screen yourself, then click **Resume**. |
 | **Search error** | Reload the extension from `chrome://extensions` / `edge://extensions`, then retry the affected company. |
 | **Source blocked** | The company's own website refused the page load. Try again later, open the company site once manually in the same browser, or paste the exact leadership-page URL into the input. |
+| **Source error** | The company page loaded but its people section could not be read. Retry, or open the page manually and use its exact URL as input. |
 
 ### Known limits
 
