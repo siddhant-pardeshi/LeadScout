@@ -286,6 +286,8 @@ function reviewDisplay(comp) {
   const code = comp.outcome || (comp.status === 'failed' ? 'search_error' : 'no_public_match');
   const defaults = {
     search_blocked: ['SEARCH BLOCKED', 'Bing needs attention before research can continue'],
+    source_blocked: ['SOURCE BLOCKED', 'Company website blocked automated access'],
+    source_error: ['SOURCE ERROR', 'Company website pages could not be read'],
     search_error: ['SEARCH ERROR', 'Search results could not be read'],
     no_profile_results: ['NO PROFILES', 'No matching LinkedIn profiles were returned by Bing'],
     candidates_rejected: ['REVIEW', 'Profile candidates did not pass company/current-role checks'],
@@ -295,7 +297,7 @@ function reviewDisplay(comp) {
   return {
     pill: pair[0], text: comp.reviewReason || pair[1],
     title: comp.reviewDetail || comp.error || '',
-    cls: code === 'search_blocked' || code === 'search_error' ? 'est' : 'u'
+    cls: code === 'search_blocked' || code === 'search_error' || code === 'source_blocked' || code === 'source_error' ? 'est' : 'u'
   };
 }
 
@@ -382,7 +384,7 @@ function renderResults(force) {
 
     const tdL = document.createElement('td');
     if (p.url) tdL.appendChild(linkEl(p.url, 'profile'));
-    else if (p.evidenceUrl) tdL.appendChild(linkEl(p.evidenceUrl, 'source'));
+    else if (p.evidenceUrl) tdL.appendChild(linkEl(p.evidenceUrl, 'evidence'));
     else tdL.appendChild(document.createTextNode('—'));
     tr.appendChild(tdL);
 

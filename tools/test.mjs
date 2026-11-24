@@ -5,11 +5,11 @@ import {
   linkedinHandle, companyMatch, companyMatchPartial, domainFromWebsite, emailFor,
   buildTSV, buildCSV, extractSizeFromText, overlapTokens, kebabName, slugScore,
   looseResolveMatch, roleCurrency, matchHunterEmail, cell, exportCell, nameEvidence,
-  officialLeadershipCandidate
+  officialLeadershipCandidate, inferWebsiteFromSerp, officialPageCandidate, classifyOutcome
 } from '../lib/parse.js';
 import { classifyDesignation, seniorityBonus } from '../lib/rank.js';
 import { extractJson, assertSafeUrl } from '../lib/ai.js';
-import { extractBingResults } from '../lib/extract.js';
+import { extractBingResults, extractOfficialLeadership, extractLinkedInCompany } from '../lib/extract.js';
 import {
   KEY_PROVIDERS, emptyKeyMeta, normalizeKeyMeta, isDateStr, localDateStr,
   daysLeft, keyStatus, fmtDate, maskKey
@@ -287,11 +287,205 @@ T('official leadership source: accepts explicit current role only on company dom
     title: 'Asha Shah - Chief Technology Officer - Acme Corp leadership team',
     snippet: '', url: 'ftp://acme.example/leadership'
   }, 'https://acme.example', 'Acme Corp'), null);
+  assert.equal(officialLeadershipCandidate({
+    title: 'Charlie Bell - Vice President, Engineer - Microsoft - Acme Board of Directors',
+    snippet: 'Acme Board of Directors', url: 'https://acme.example/board-of-directors'
+  }, 'https://acme.example', 'Acme'), null);
   const legalVariant = officialLeadershipCandidate({
     title: 'Asha Shah - Chief Technology Officer - Godrej Industries leadership team',
     snippet: 'Godrej Industries leadership team', url: 'https://godrej.example/leadership'
   }, 'https://godrej.example', 'Godrej Industries Group');
   assert.equal(legalVariant.name, 'Asha Shah');
+});
+
+T('inferWebsiteFromSerp: company homepage, not directories or lookalikes', () => {
+  const serp = [
+    { title: 'Twilio - Wikipedia', url: 'https://en.wikipedia.org/wiki/Twilio' },
+    { title: 'Conversational AI and APIs | Twilio', url: 'https://www.twilio.com/en-us' },
+    { title: 'Twilio login', url: 'https://login.twilio.com/' }
+  ];
+  const site = inferWebsiteFromSerp(serp, 'Twilio');
+  assert.equal(site.url, 'https://twilio.com/');
+  assert.equal(site.host, 'twilio.com');
+  assert.equal(inferWebsiteFromSerp([{ title: 'Twilio', url: 'https://www.linkedin.com/company/twilio/' }], 'Twilio'), null);
+  assert.equal(inferWebsiteFromSerp([{ title: 'Twilio', url: 'https://twilio-login.example/phish' }], 'Twilio'), null);
+  assert.equal(inferWebsiteFromSerp([{ title: 'Acme Corp', url: 'https://www.acme.com/' }], 'Acme Corp').host, 'acme.com');
+});
+
+T('officialPageCandidate: leadership yes, external board role and lookalike no', () => {
+  const site = 'https://acme.example';
+  const lead = officialPageCandidate({
+    name: 'Asha Shah', role: 'Chief Technology Officer',
+    section: 'Acme Leadership team', pageTitle: 'Acme Leadership Team | Acme',
+    url: 'https://acme.example/leadership', evidence: 'Asha Shah Chief Technology Officer'
+  }, site, 'Acme');
+  assert.ok(lead);
+  assert.equal(lead.evidenceUrl, 'https://acme.example/leadership');
+  assert.equal(lead.sourceType, 'official');
+  assert.equal(officialPageCandidate({
+    name: 'Charlie Bell', role: 'Executive Vice President, Engineer, Microsoft',
+    section: 'Acme Board of Directors', pageTitle: 'Acme Leadership Team | Acme',
+    url: 'https://acme.example/leadership', evidence: ''
+  }, site, 'Acme'), null);
+  assert.equal(officialPageCandidate({
+    name: 'Asha Shah', role: 'Former Chief Technology Officer',
+    section: 'Acme Leadership team', pageTitle: 'Acme Leadership',
+    url: 'https://acme.example/leadership', evidence: ''
+  }, site, 'Acme'), null);
+  assert.equal(officialPageCandidate({
+    name: 'Asha Shah', role: 'Chief Technology Officer',
+    section: 'Acme Leadership team', pageTitle: 'Acme Leadership',
+    url: 'https://acme.example.evil.com/leadership', evidence: ''
+  }, site, 'Acme'), null);
+  assert.equal(officialPageCandidate({
+    name: 'Acme Corp', role: 'Chief Executive Officer',
+    section: 'Acme Leadership team', pageTitle: 'Acme Leadership',
+    url: 'https://acme.example/leadership', evidence: ''
+  }, site, 'Acme'), null);
+});
+
+T('classifyOutcome: blocked, error, no profiles, rejected and found are distinct', () => {
+  const base = {
+    queryCount: 2, rawResultCount: 10, profileResultCount: 3, acceptedCount: 0,
+    rejected: { wrong_company: 3 }, sourceStates: {}, queries: ['q1']
+  };
+  assert.equal(classifyOutcome(1, base).outcome, 'people_found');
+  assert.equal(classifyOutcome(0, { ...base, sourceStates: { 'bing-captcha': 1 } }).outcome, 'search_blocked');
+  assert.equal(classifyOutcome(0, { ...base, sourceStates: { 'bing-extractor-error': 1 } }).outcome, 'search_error');
+  assert.equal(classifyOutcome(0, { ...base, profileResultCount: 0, official: { used: true, blocked: 1 } }).outcome, 'source_blocked');
+  assert.equal(classifyOutcome(0, { ...base, profileResultCount: 0, official: { used: true, pages: 2, errors: 2 } }).outcome, 'source_error');
+  assert.equal(classifyOutcome(0, { ...base, profileResultCount: 0, official: { used: true, pages: 3, candidates: 2 } }).outcome, 'no_profile_results');
+  assert.equal(classifyOutcome(0, { ...base, acceptedCount: 0 }).outcome, 'candidates_rejected');
+  assert.equal(classifyOutcome(0, { ...base, acceptedCount: 1 }).outcome, 'no_public_match');
+  assert.match(classifyOutcome(0, base).detail, /last query: q1/);
+});
+
+T('extractOfficialLeadership: heading pairs and section boundaries', () => {
+  const el = (tagName, innerText, extra) => Object.assign({ tagName, innerText, nextElementSibling: null, parentElement: null }, extra || {});
+  const ceoName = el('H3', 'Khozema Shipchandler');
+  const ceoRole = el('H4', 'Chief Executive Officer');
+  const extName = el('H3', 'Charlie Bell');
+  const extRole = el('H4', 'Executive Vice President, Engineer, Microsoft');
+  ceoName.parentElement = { innerText: 'Khozema Shipchandler Chief Executive Officer' };
+  extName.parentElement = { innerText: 'Charlie Bell Executive Vice President, Engineer, Microsoft' };
+  const heads = [
+    el('H1', 'Meet our team'), el('H2', 'Acme Leadership team'), ceoName, ceoRole,
+    el('H2', 'Acme Board of Directors'), extName, extRole
+  ];
+  const fakeDocument = {
+    title: 'Acme Leadership Team & Board of Directors | Acme',
+    body: { innerText: 'Acme leadership team' },
+    querySelectorAll(selector) {
+      if (selector === 'h1,h2,h3,h4,h5') return heads;
+      if (selector === 'script[type="application/ld+json"]') return [];
+      if (selector === 'a[href]') return [{
+        href: 'https://acme.example/leadership', innerText: 'Leadership', getAttribute() { return ''; }
+      }];
+      return [];
+    }
+  };
+  const hadDocument = Object.prototype.hasOwnProperty.call(globalThis, 'document');
+  const oldDocument = globalThis.document;
+  const hadLocation = Object.prototype.hasOwnProperty.call(globalThis, 'location');
+  const oldLocation = globalThis.location;
+  globalThis.document = fakeDocument;
+  globalThis.location = { href: 'https://acme.example/leadership', hostname: 'acme.example' };
+  try {
+    const out = extractOfficialLeadership();
+    assert.equal(out.blocked, false);
+    assert.equal(out.candidates.length, 2);
+    assert.equal(out.candidates[0].name, 'Khozema Shipchandler');
+    assert.equal(out.candidates[0].section, 'Acme Leadership team');
+    assert.equal(out.candidates[1].section, 'Acme Board of Directors');
+    assert.ok(out.links.some(link => /leadership/.test(link.url)));
+  } finally {
+    if (hadDocument) globalThis.document = oldDocument; else delete globalThis.document;
+    if (hadLocation) globalThis.location = oldLocation; else delete globalThis.location;
+  }
+});
+
+T('extractLinkedInCompany: Cloudflare challenge is not a company', () => {
+  const hadDocument = Object.prototype.hasOwnProperty.call(globalThis, 'document');
+  const oldDocument = globalThis.document;
+  globalThis.document = {
+    title: 'Just a moment...',
+    body: { innerText: 'Performing security verification' },
+    querySelector() { return null; },
+    querySelectorAll() { return []; }
+  };
+  try {
+    const out = extractLinkedInCompany();
+    assert.equal(out.found, false);
+    assert.equal(out.authwall, true);
+    assert.equal(out.blocked, true);
+    assert.equal(out.name, '');
+  } finally {
+    if (hadDocument) globalThis.document = oldDocument; else delete globalThis.document;
+  }
+});
+
+T('extractBingResults: redirect/direct duplicates and non-person paths', () => {
+  const profile = 'https://www.linkedin.com/in/asha/';
+  const anchors = [
+    { href: profile + '?trk=public_profile', innerText: 'Asha Shah - CTO - Acme | LinkedIn', closest() { return null; }, parentElement: null },
+    { href: profile, innerText: 'Asha Shah - CTO - Acme | LinkedIn', closest() { return null; }, parentElement: null },
+    { href: 'https://www.linkedin.com/in/dir/people/', innerText: 'Directory', closest() { return null; }, parentElement: null },
+    { href: 'https://www.linkedin.com/in/groups/x/', innerText: 'Group', closest() { return null; }, parentElement: null },
+    { href: 'https://www.linkedin.com/in/topic/x/', innerText: 'Topic', closest() { return null; }, parentElement: null }
+  ];
+  const hadDocument = Object.prototype.hasOwnProperty.call(globalThis, 'document');
+  const oldDocument = globalThis.document;
+  const hadLocation = Object.prototype.hasOwnProperty.call(globalThis, 'location');
+  const oldLocation = globalThis.location;
+  globalThis.document = {
+    title: 'Bing results',
+    body: { innerText: 'Search results', innerHTML: '' },
+    querySelector(selector) { return selector === '#b_results' ? {} : null; },
+    querySelectorAll(selector) {
+      if (selector === '#b_results li.b_algo') return [];
+      if (selector === 'a[href]') return anchors;
+      return [];
+    }
+  };
+  globalThis.location = { href: 'https://www.bing.com/search?q=acme' };
+  try {
+    const out = extractBingResults();
+    assert.equal(out.profileResultCount, 1);
+    assert.equal(out.results.length, 1);
+    assert.equal(out.results[0].url, profile);
+  } finally {
+    if (hadDocument) globalThis.document = oldDocument; else delete globalThis.document;
+    if (hadLocation) globalThis.location = oldLocation; else delete globalThis.location;
+  }
+});
+
+T('extractBingResults: consent, captcha and no-results are distinct', () => {
+  const hadDocument = Object.prototype.hasOwnProperty.call(globalThis, 'document');
+  const oldDocument = globalThis.document;
+  const hadLocation = Object.prototype.hasOwnProperty.call(globalThis, 'location');
+  const oldLocation = globalThis.location;
+  const fake = (title, bodyText, html, hasResults) => ({
+    title,
+    body: { innerText: bodyText, innerHTML: html || '' },
+    querySelector(selector) {
+      if (selector === '#b_results') return hasResults ? {} : null;
+      if (selector === 'form[action*="/search"]') return null;
+      return null;
+    },
+    querySelectorAll() { return []; }
+  });
+  globalThis.location = { href: 'https://www.bing.com/search?q=x' };
+  try {
+    globalThis.document = fake('Before you continue to Bing', 'Before you continue to Bing', '', false);
+    assert.equal(extractBingResults().consent, true);
+    globalThis.document = fake('Verify you are human', 'Please verify you are human', '', false);
+    assert.equal(extractBingResults().captcha, true);
+    globalThis.document = fake('Search', 'No results', '<div class="b_no">There are no results for x</div>', true);
+    assert.equal(extractBingResults().noResults, true);
+  } finally {
+    if (hadDocument) globalThis.document = oldDocument; else delete globalThis.document;
+    if (hadLocation) globalThis.location = oldLocation; else delete globalThis.location;
+  }
 });
 
 // ---------------- AI JSON plumbing ----------------
@@ -337,7 +531,7 @@ T('buildTSV: header + rows + review row + full columns', () => {
   }];
   const full = buildTSV(comps, { core: false });
   const lines = full.split('\n');
-  assert.equal(lines[0].split('\t').length, 14);
+  assert.equal(lines[0].split('\t').length, 16);
   assert.ok(lines[1].includes('Jane Doe'));
   assert.ok(lines[1].includes('Verified'));
   assert.ok(lines[2].includes('Unverified'));
@@ -379,12 +573,28 @@ T('buildTSV: full export carries official evidence without changing core URL sem
     }]
   }];
   const full = buildTSV(comps, { core: false });
-  assert.equal(full.split('\n')[0].split('\t').length, 14);
+  assert.equal(full.split('\n')[0].split('\t').length, 16);
   assert.match(full.split('\n')[0], /LinkedIn URL/);
-  assert.equal(full.split('\n')[1].split('\t')[6], '');
+  const row = full.split('\n')[1].split('\t');
+  assert.equal(row[6], '');
+  assert.equal(row[14], 'https://acme.example/leadership');
+  assert.equal(row[15], 'Official company source');
   assert.match(full, /Official company source/);
   const core = buildTSV(comps, { core: true });
   assert.equal(core.split('\n')[1].split('\t')[6], '');
+});
+
+T('buildCSV: Unicode, quoting and formula safety', () => {
+  const csv = buildCSV([{
+    name: 'Acme, Inc.', people: [{
+      name: 'José García', designation: 'CTO', url: '', urlVerified: false,
+      pri: 1, score: 1, priority: 'P1', email: '=SUM(1,1)', emailStatus: 'estimated — unverified'
+    }]
+  }], { core: false });
+  assert.ok(csv.includes('"Acme, Inc."'));
+  assert.ok(csv.includes('José García'));
+  assert.ok(csv.includes("'=SUM(1,1)"));
+  assert.ok(csv.includes('estimated — unverified'));
 });
 
 // ---- v1.3 role currency (latest designation, not past) ----
@@ -552,7 +762,7 @@ T('matchHunterEmail: no match → null (pattern estimation takes over)', () => {
 });
 
 // ---- v1.3 export columns ----
-T('buildTSV v1.3: 14 columns incl. Role Currency + HQ', () => {
+T('buildTSV v1.3: 16 columns incl. Role Currency, HQ and evidence', () => {
   const comps = [{
     name: 'Acme Corp', country: 'India', hq: 'Bengaluru, Karnataka, India',
     size: '201-500 employees', industry: 'Software Development',
@@ -563,9 +773,11 @@ T('buildTSV v1.3: 14 columns incl. Role Currency + HQ', () => {
   }];
   const full = buildTSV(comps, { core: false });
   const head = full.split('\n')[0].split('\t');
-  assert.equal(head.length, 14);
+  assert.equal(head.length, 16);
   assert.equal(head[9], 'Role Currency');
   assert.equal(head[12], 'HQ');
+  assert.equal(head[14], 'Evidence URL');
+  assert.equal(head[15], 'Source Type');
   const row = full.split('\n')[1].split('\t');
   assert.equal(row[9], 'Current');
   const core = buildTSV(comps, { core: true });
@@ -598,7 +810,7 @@ await (async function backgroundSmoke() {
     runtime: {
       onMessage: { addListener: (fn) => { messageHandler = fn; } },
       onInstalled: { addListener: () => {} },
-      getManifest: () => ({ version: '1.6.0' }),
+      getManifest: () => ({ version: '1.7.0' }),
       getPlatformInfo: () => {}
     }
   };
@@ -616,7 +828,7 @@ await (async function backgroundSmoke() {
       });
       assert.equal(keepAlive, true);
     });
-    assert.deepEqual(response, { ok: true, version: '1.6.0' });
+    assert.deepEqual(response, { ok: true, version: '1.7.0' });
     passed++;
     console.log('  ok  ' + name);
   } catch (e) {

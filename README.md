@@ -7,12 +7,12 @@
 **Research 50–100 companies in one run. Get decision-makers — current roles, verified profile links, emails — straight into Excel as TSV.**
 
 A Chrome / Microsoft Edge extension that replaces the one-company-at-a-time chatbot workflow for B2B lead research.
-Runs in your browser · Bing-powered · works without any API key · free AI keys optional.
+Runs in your browser · Bing + company-owned pages · works without any API key · free AI keys optional.
 
 [![Chrome MV3](https://img.shields.io/badge/Manifest-V3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/)
 [![Edge](https://img.shields.io/badge/Microsoft%20Edge-supported-0078D7?logo=microsoftedge&logoColor=white)](https://www.microsoft.com/edge)
-[![Version](https://img.shields.io/badge/version-1.6.0-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
-[![Tests](https://img.shields.io/badge/tests-56%20passing-34D399)](#-testing--quality)
+[![Version](https://img.shields.io/badge/version-1.7.0-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
+[![Tests](https://img.shields.io/badge/tests-64%20passing-34D399)](#-testing--quality)
 [![License](https://img.shields.io/badge/license-MIT-34D399)](LICENSE)
 [![Bing](https://img.shields.io/badge/search-Bing-008373)](https://www.bing.com)
 
@@ -138,7 +138,7 @@ No key at all? LeadScout still works from public Bing results and company-owned 
 |---|---|
 | **Bulk input** | Paste 50–100 companies at once — URLs, names, or mixed lines (`Postman - https://…`). Duplicates are removed. |
 | **3-tier name resolution** | Typed a name? LeadScout guesses the LinkedIn slug and verifies it by loading the page, then falls back to scored Bing results. A guess is never accepted unless the page name matches. |
-| **Source-aware recovery** | If Bing does not index a usable LinkedIn profile, LeadScout can use an explicit current leadership statement from the company's own website. It labels that row **Official**, links the evidence, and never invents a profile URL. |
+| **Source-aware recovery** | If Bing does not index a usable LinkedIn profile, LeadScout can read the company's own leadership/management page directly. It labels the row **Official**, links the evidence URL, and never invents a profile URL. |
 | **Per-company isolation** | Each company gets its own search corpus and AI call. The classic bulk-research bug — Company A's CEO appearing under Company B — is structurally prevented. |
 | **Deep page scan** | Reads LinkedIn's `/about/` page for industry, company size, HQ and website, with retries for slow rendering and a guest-mode fallback. |
 | **3 scan depths** | Quick (1 search), Standard (2), Deep (4) — roughly 10 s to 40 s per company. |
@@ -165,8 +165,8 @@ No second Apollo extension is required. If you already have Apollo, keep it — 
 ### 📋 Excel export
 | Feature | What it means for you |
 |---|---|
-| **One-click TSV** | Copies the full 14-column table; paste straight into Excel. |
-| **14 columns** | Name · Designation · Country · Company Name · Company Size · Industry · LinkedIn URL · Email · Email Status · Role Currency · Priority · Verification · HQ · Company Page. |
+| **One-click TSV** | Copies the full 16-column table; paste straight into Excel. |
+| **16 columns** | Name · Designation · Country · Company Name · Company Size · Industry · LinkedIn URL · Email · Email Status · Role Currency · Priority · Verification · HQ · Company Page · **Evidence URL** · **Source Type**. |
 | **Core 7-column mode** | Exactly the classic research template: Name, Designation, Country, Company, Size, Industry, LinkedIn URL. |
 | **Filter-aware export** | Filter to C-Suite or Verified-only, then copy exactly that. |
 | **TSV / CSV download** | CSV includes a UTF-8 BOM so “José García” opens correctly in Excel. |
@@ -208,6 +208,7 @@ What was done for Edge/Bing compatibility:
 
 - No Chrome-only APIs: only `chrome.storage`, `tabs`, `scripting`, `alarms`, `notifications`, `permissions`, `runtime`, `action`.
 - Manifest cleaned for store compatibility: short store-safe name, 120-character description, `homepage_url`, no Chrome-only minimum-version gate.
+- Company-site recovery needs to read public company pages, so the manifest declares `https://*/*` host access. It is used only for the company whose website was found for the current row; there is no background browsing, telemetry or server.
 - Recovery instructions detect Edge and point to `edge://extensions` instead of `chrome://extensions`.
 - A context guard explains what to do if the popup is opened outside an extension context.
 - The whole flow was smoke-tested in Edge (load, service worker, popup, key save, reload persistence, expiry warning, clear).
@@ -217,7 +218,8 @@ What was done for Edge/Bing compatibility:
 ## 🔒 Privacy and responsible use
 
 - No LeadScout server, no analytics, no account.
-- Searches go to Bing; company pages to LinkedIn; AI requests to the provider whose key you saved; Hunter requests to Hunter.
+- Searches go to Bing; company pages to LinkedIn or the company's own website; AI requests to the provider whose key you saved; Hunter requests to Hunter.
+- The broad `https://*/*` host permission exists so the bounded company-site fallback can read a public leadership page and extract names/roles. It is not used to browse unrelated sites, and the scan stops after a small page budget.
 - Keys never leave your browser except as authentication to their own provider.
 - LeadScout reads **public search results and public pages you can already see**, at human-like pace, through your own session. It does not mass-scrape employee lists.
 - Keep volumes moderate (the built-in pacing exists for a reason) and follow local privacy law (GDPR/DPDP/etc.) when storing or contacting people.
@@ -240,7 +242,7 @@ LeadScout/
 │   ├── ai.js            provider adapters + SSRF-safe URLs
 │   ├── verify-lead.js   evidence verifier (cited + dated claims)
 │   ├── hunter.js        Hunter.io client
-│   └── extract.js       DOM extractors injected into Bing/LinkedIn pages
+│   └── extract.js       DOM extractors for Bing, LinkedIn and company leadership pages
 ├── assets/              animated SVG artwork
 └── tools/               tests · evidence evaluation · icon/QA helpers
 ```
@@ -252,13 +254,15 @@ Key invariants live in code: profile URLs from real results, AI names grounded i
 ## 🧪 Testing and quality
 
 ```bash
-node tools/test.mjs                  # 56 deterministic checks + MV3/ESM smoke tests
+node tools/test.mjs                  # 64 deterministic checks + MV3/ESM smoke tests
 node tools/diag_linkcheck.mjs        # standalone import-graph check
 node tools/eval-evidence.mjs         # evidence-verifier smoke test
 node tools/live-eval-evidence.mjs --offline   # 11-claim comparison
 ```
 
 The suite covers input parsing, Bing redirect decoding, title extraction, company matching, the 3-tier resolver, role-currency logic, the AI corpus-grounding gate, key/expiry math, Hunter matching and TSV/CSV builders.
+
+**Manual live smoke (24 Nov 2026, Edge 158, no API key):** Twilio → 7 official people with evidence URLs; HubSpot → 9; Freshworks → 9; a deliberately nonexistent company → `no_profile_results` with query/result/profile diagnostics. Re-verify names and roles against the linked evidence before outreach.
 
 ---
 
@@ -275,6 +279,15 @@ The suite covers input parsing, Bing redirect decoding, title extraction, compan
 | **No profiles** / **Review** | Bing returned no matching profiles or the candidates did not pass company/current-role checks. Hover the reason for query and rejection counts; try **Deep** mode or paste the exact LinkedIn URL. |
 | **Search blocked** | Open the LeadScout Bing tab, complete Bing's consent or human-verification screen yourself, then click **Resume**. |
 | **Search error** | Reload the extension from `chrome://extensions` / `edge://extensions`, then retry the affected company. |
+| **Source blocked** | The company's own website refused the page load. Try again later, open the company site once manually in the same browser, or paste the exact leadership-page URL into the input. |
+
+### Known limits
+
+- Company website layouts vary. LeadScout reads JSON-LD `Person` data, heading pairs and leadership cards; sites that render people only in canvas/JS-only widgets may yield no official rows.
+- A company-owned page can itself be stale. The evidence URL is provided so you can confirm the role before outreach; LeadScout never upgrades an official row to a LinkedIn verification.
+- Websites inferred from search are candidates. Official rows still require the page domain to match the inferred company domain and the page title to name the company.
+- Bing sometimes serves degraded results to automated sessions. When profile search returns nothing, the direct company-page fallback is the intended path; it is not a LinkedIn-scraping bypass.
+- The broad host permission is necessary for that fallback; Edge/Chrome will show a “read and change data on websites” warning at install time.
 
 ---
 
@@ -282,6 +295,7 @@ The suite covers input parsing, Bing redirect decoding, title extraction, compan
 
 | Version | Highlights |
 |---|---|
+| **1.7.0** | Direct company-site leadership recovery (JSON-LD, heading pairs, cards), website inference when LinkedIn is walled, Cloudflare/authwall detection, source-blocked/no-profile outcomes, evidence URL + source columns, broad company-site host access; live-verified on Twilio, HubSpot and Freshworks. |
 | **1.6.0** | Fixed Bing profile-anchor extraction when generic results are present; decodes Bing-wrapped profile links; source-aware company-site leadership fallback; persisted candidate diagnostics and honest blocked/error/no-profile states; Chrome 116-compatible alarm recovery. |
 | **1.5.0** | **Persistent API key vault** with saved/expiry dates, per-key save/clear, show/hide, test-and-record; expiry warning banner; Microsoft Edge/Bing compatibility pass; store-safe manifest; custom-endpoint key fixed |
 | **1.4.1** | Service-worker recovery (no more “status code 15” dead-end), Gemini model-id override, AI corpus-grounding gate, evidence verifier + evaluation runner |

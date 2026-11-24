@@ -17,12 +17,13 @@ import {
   slugFromUrl, titleCaseSlug, decodeBingUrl, parseProfileTitle, linkedinHandle,
   isLinkedInProfile, companyMatch, companyMatchPartial, emailFor, domainFromWebsite,
   extractSizeFromText, overlapTokens, kebabName, slugScore, looseResolveMatch,
-  roleCurrency, matchHunterEmail, cell, nameEvidence, officialLeadershipCandidate
+  roleCurrency, matchHunterEmail, cell, nameEvidence, officialLeadershipCandidate,
+  inferWebsiteFromSerp, officialPageCandidate, classifyOutcome
 } from './lib/parse.js';
 import { classifyDesignation, seniorityBonus } from './lib/rank.js';
 import { aiResearch, aiTestKey } from './lib/ai.js';
 import { hunterDomainSearch } from './lib/hunter.js';
-import { extractBingResults, extractLinkedInCompany } from './lib/extract.js';
+import { extractBingResults, extractLinkedInCompany, extractOfficialLeadership } from './lib/extract.js';
 
 // ------------------------------------------------------------ app state ----
 
@@ -36,6 +37,7 @@ const S = {
   runId: 0,
   tabBing: null,
   tabLI: null,
+  tabOfficial: null,
   lastActiveTab: null,
   heartbeat: null
 };
@@ -89,7 +91,8 @@ function jitter(base) {
 // ------------------------------------------------------- worker-tab utils ----
 
 async function ensureTab(which, url) {
-  let tabId = which === 'bing' ? S.tabBing : S.tabLI;
+  const key = which === 'bing' ? 'tabBing' : (which === 'official' ? 'tabOfficial' : 'tabLI');
+  let tabId = S[key];
   const wants = url;
   try {
     const tab = await chrome.tabs.get(tabId);
@@ -97,7 +100,7 @@ async function ensureTab(which, url) {
   } catch (e) {
     const created = await chrome.tabs.create({ url: 'about:blank', active: false });
     tabId = created.id;
-    if (which === 'bing') S.tabBing = tabId; else S.tabLI = tabId;
+    S[key] = tabId;
   }
   await chrome.tabs.update(tabId, { url: wants });
   return tabId;
@@ -306,6 +309,7 @@ function peopleFromSerp(serp, companyName, allowPartial) {
       urlVerified: true,
       currentEmployer: role,
       source: 'bing',
+      sourceType: 'linkedin',
       confidence: confidence,
       cat: cls.cat, pri: cls.pri, score: cls.sc
     });
@@ -364,11 +368,13 @@ function makeDiscovery() {
   return {
     queryCount: 0, rawResultCount: 0, profileResultCount: 0,
     parseableCount: 0, acceptedCount: 0,
+    queries: [],
     rejected: {
       bad_profile_url: 0, directory_or_nonperson: 0, duplicate: 0,
       unparseable_title: 0, wrong_company: 0, past_role: 0,
       no_explicit_current_leader: 0
     },
+    official: { used: false, pages: 0, candidates: 0, accepted: 0, blocked: 0, errors: 0, visited: [] },
     sourceStates: {}, fallbackUsed: false, officialFallbackUsed: false
   };
 }
@@ -378,6 +384,9 @@ function recordSearch(discovery, meta) {
   discovery.queryCount++;
   discovery.rawResultCount += Number(meta.resultCount || 0);
   discovery.profileResultCount += Number(meta.profileResultCount || 0);
+  if (meta.query && discovery.queries.length < 8 && !discovery.queries.includes(meta.query)) {
+    discovery.queries.push(String(meta.query).slice(0, 240));
+  }
   const state = meta.state || 'ok';
   discovery.sourceStates[state] = (discovery.sourceStates[state] || 0) + 1;
 }
@@ -393,42 +402,10 @@ function applyCandidateStats(discovery, stats) {
 }
 
 function buildReviewOutcome(comp) {
-  const d = comp.discovery || makeDiscovery();
-  const states = d.sourceStates || {};
-  const rejected = Object.values(d.rejected || {}).reduce((sum, n) => sum + Number(n || 0), 0);
-  const details = [
-    d.queryCount + ' queries', d.rawResultCount + ' readable results',
-    d.profileResultCount + ' profile results', rejected + ' rejected'
-  ].join(' · ');
-
-  if ((comp.people || []).length) {
-    comp.outcome = 'people_found';
-    comp.reviewReason = '';
-    comp.reviewDetail = details;
-  } else if (states.captcha || states.consent || states['bing-captcha'] || states['bing-consent']) {
-    comp.outcome = 'search_blocked';
-    comp.reviewReason = (states.captcha || states['bing-captcha'])
-      ? 'Search blocked by Bing verification' : 'Bing consent is required';
-    comp.reviewDetail = details;
-  } else if (states['extractor-error'] || states['bing-extractor-error']) {
-    comp.outcome = 'search_error';
-    comp.reviewReason = 'Search results could not be read';
-    comp.reviewDetail = details;
-  } else if (!d.profileResultCount) {
-    comp.outcome = 'no_profile_results';
-    comp.reviewReason = d.officialFallbackUsed
-      ? 'No matching LinkedIn profiles or company leadership evidence was found'
-      : 'No matching LinkedIn profiles were returned by Bing';
-    comp.reviewDetail = details;
-  } else if (!d.acceptedCount && rejected) {
-    comp.outcome = 'candidates_rejected';
-    comp.reviewReason = 'Profile candidates did not pass company/current-role checks';
-    comp.reviewDetail = details;
-  } else {
-    comp.outcome = 'no_public_match';
-    comp.reviewReason = 'No evidence-backed decision-maker was found';
-    comp.reviewDetail = details;
-  }
+  const outcome = classifyOutcome((comp.people || []).length, comp.discovery || makeDiscovery());
+  comp.outcome = outcome.outcome;
+  comp.reviewReason = outcome.reason;
+  comp.reviewDetail = outcome.detail;
 }
 
 function mergeAiPeople(base, aiPeople, serp, companyName) {
@@ -483,6 +460,7 @@ function mergeAiPeople(base, aiPeople, serp, companyName) {
       urlVerified: verified,
       currentEmployer: evidence.role,
       source: verified ? 'bing+ai' : 'ai+corpus',
+      sourceType: verified ? 'linkedin' : 'ai',
       confidence: Math.min(1, (Number(p.confidence) || 0.5) * (verified ? 1 : 0.85)),
       cat: cls.cat, pri: cls.pri, score: Math.round(cls.sc * (verified ? 1 : 0.85))
     });
@@ -578,6 +556,121 @@ async function hunterLookup(domain, apiKey) {
   return data;
 }
 
+const OFFICIAL_PATHS = [
+  '/leadership', '/company/leadership', '/en-us/company/leadership', '/en/company/leadership',
+  '/management', '/company/management', '/leadership-team', '/about/leadership',
+  '/about/management', '/executive-team', '/about/executive-team', '/people', '/about/people',
+  '/our-team', '/team', '/governance', '/board-of-directors'
+];
+
+function isOfficialCandidateUrl(url) {
+  try {
+    const path = new URL(String(url)).pathname.toLowerCase();
+    return !/(?:^|\/)(?:careers|jobs|login|signin|support|blog|news|press|privacy|terms|contact)(?:\/|$)/.test(path);
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Bounded crawl of the company's own leadership pages. LinkedIn company pages
+ * are frequently walled by Cloudflare; the company site usually is not. Only
+ * explicit name + current leadership role pairs from the verified domain are
+ * returned, and no LinkedIn URL is ever created here.
+ */
+async function readOfficialLeadership(website, companyName) {
+  const domain = domainFromWebsite(website);
+  const stats = {
+    used: true, pages: 0, candidates: 0, accepted: 0, blocked: 0, errors: 0, states: {},
+    rejected: { no_explicit_current_leader: 0 }, visited: []
+  };
+  const people = [];
+  if (!domain) return { people, stats };
+  const proto = /^http:\/\//i.test(String(website)) ? 'http:' : 'https:';
+  const base = proto + '//' + domain;
+  const seen = new Set();
+  const queue = [base + '/'];
+  let pathsAdded = false;
+
+  while (queue.length && stats.pages < 10 && people.length < 3) {
+    if (!S.job.running || S.job.paused) throw new Error('paused');
+    const url = queue.shift();
+    const norm = String(url).replace(/#.*$/, '').replace(/\/+$/, '');
+    if (!norm || seen.has(norm)) continue;
+    seen.add(norm);
+    let out = null;
+    try {
+      const tabId = await ensureTab('official', url);
+      await waitForTabLoad(tabId, 22000);
+      await sleep(900);
+      stats.pages++;
+      const frames = await chrome.scripting.executeScript({ target: { tabId }, func: extractOfficialLeadership });
+      out = frames && frames[0] && frames[0].result;
+    } catch (e) {
+      stats.errors = (stats.errors || 0) + 1;
+      stats.states['official-error'] = (stats.states['official-error'] || 0) + 1;
+      continue;
+    }
+    if (!out) {
+      stats.errors = (stats.errors || 0) + 1;
+      stats.states['official-unreadable'] = (stats.states['official-unreadable'] || 0) + 1;
+      if (!queue.length && !pathsAdded) {
+        pathsAdded = true;
+        for (const p of OFFICIAL_PATHS) queue.push(base + p);
+      }
+      continue;
+    }
+    if (out.blocked) {
+      stats.blocked++;
+      stats.states['official-blocked'] = (stats.states['official-blocked'] || 0) + 1;
+    } else {
+      const pageCandidates = Array.isArray(out.candidates) ? out.candidates : [];
+      stats.candidates += pageCandidates.length;
+      let pageAccepted = 0;
+      for (const candidate of pageCandidates) {
+        const validated = officialPageCandidate({
+          ...candidate,
+          url: out.url || url,
+          pageTitle: out.title || ''
+        }, website, companyName);
+        if (!validated) { stats.rejected.no_explicit_current_leader++; continue; }
+        if (people.some(p => p.name.toLowerCase() === validated.name.toLowerCase())) continue;
+        people.push({
+          ...validated,
+          url: '', handle: null, urlVerified: false,
+          currentEmployer: 'official', source: 'official',
+          verification: 'Official company source',
+          confidence: 0.8
+        });
+        stats.accepted++;
+        pageAccepted++;
+      }
+      if (stats.visited.length < 12) {
+        stats.visited.push({
+          url: out.url || url, title: String(out.title || '').slice(0, 120),
+          candidates: pageCandidates.length, accepted: pageAccepted
+        });
+      }
+      if (people.length < 3) {
+        for (const link of (out.links || []).slice(0, 3)) {
+          if (!link || !link.url || !isOfficialCandidateUrl(link.url)) continue;
+          const n = String(link.url).replace(/#.*$/, '').replace(/\/+$/, '');
+          if (n && !seen.has(n)) queue.push(link.url);
+        }
+      }
+    }
+    // Known leadership paths are tried before generic about/company links.
+    if (!pathsAdded && stats.pages >= 1 && !people.length) {
+      pathsAdded = true;
+      const extraPaths = OFFICIAL_PATHS
+        .map(p => base + p)
+        .filter(u => !seen.has(u.replace(/#.*$/, '').replace(/\/+$/, '')));
+      queue.unshift(...extraPaths);
+    }
+  }
+  return { people, stats };
+}
+
 async function researchCompany(item, idx) {
   // v1.1: on retry, update the existing results entry instead of adding a
   // duplicate row (v1.0 bug: "Retry failed" created a second entry).
@@ -597,7 +690,7 @@ async function researchCompany(item, idx) {
       slug: item.slug || null,
       url: item.slug ? ('https://www.linkedin.com/company/' + item.slug + '/') : '',
       name: item.name || titleCaseSlug(item.slug) || '',
-      industry: '', size: '', hq: '', website: '', country: '',
+      industry: '', size: '', hq: '', website: '', websiteSource: '', country: '',
       factSource: 'none',
       aiDropped: 0,
       people: [], status: 'working', error: '', finishedAt: null,
@@ -609,6 +702,7 @@ async function researchCompany(item, idx) {
   comp.outcome = '';
   comp.reviewReason = '';
   comp.reviewDetail = '';
+  comp.websiteSource = comp.websiteSource || '';
   await persist();
 
   const companyName = () => comp.name || item.name || titleCaseSlug(item.slug) || '';
@@ -652,13 +746,18 @@ async function researchCompany(item, idx) {
           candidates.push({ slug: slug, score: loose * 10 + slugScore(slug, comp.name) });
         }
       };
-      collect(await search('"' + stripQuotes(comp.name) + '" site:linkedin.com/company'));
-      if (!candidates.length) {
-        collect(await search(stripQuotes(comp.name) + ' site:linkedin.com/company'));
-      }
-      if (!candidates.length) {
-        collect(await search(comp.name + ' linkedin company page'));
-      }
+      const addResolve = async (query) => {
+        const list = await search(query);
+        collect(list);
+        if (!comp.website) {
+          const web = inferWebsiteFromSerp(list, comp.name);
+          if (web) { comp.website = web.url; comp.websiteSource = 'search'; }
+        }
+        return list;
+      };
+      await addResolve('"' + stripQuotes(comp.name) + '" site:linkedin.com/company');
+      if (!candidates.length) await addResolve(stripQuotes(comp.name) + ' site:linkedin.com/company');
+      if (!candidates.length) await addResolve(comp.name + ' linkedin company page');
       if (candidates.length) {
         candidates.sort((a, b) => b.score - a.score); // stable — ties keep SERP order
         comp.slug = candidates[0].slug;
@@ -680,7 +779,7 @@ async function researchCompany(item, idx) {
       if (liData.industry) comp.industry = liData.industry;
       if (liData.size) comp.size = liData.size;
       if (liData.hq) comp.hq = liData.hq;
-      if (liData.website) comp.website = liData.website;
+      if (liData.website) { comp.website = liData.website; comp.websiteSource = 'linkedin'; }
       comp.factSource = 'linkedin';
     } else if (liData && liData.authwall) {
       comp.factSource = 'none'; // fall back to AI/SERP facts
@@ -688,6 +787,15 @@ async function researchCompany(item, idx) {
   }
 
   // ---- 3. scoped Bing queries for decision-makers --------------------------
+  // A walled LinkedIn page may leave the website unknown. One bounded
+  // company-name query is enough to find the company's own homepage, which is
+  // a candidate for the source-aware fallback (still domain-validated later).
+  if (!comp.website && SETTINGS.deepScan) {
+    const webSerp = await search(stripQuotes(companyName()) + ' official website');
+    const web = inferWebsiteFromSerp(webSerp, companyName());
+    if (web) { comp.website = web.url; comp.websiteSource = 'search'; }
+  }
+
   let serp = [];
   const allowPartial = (item.type === 'name' && !comp.slug);
   const queries = buildQueries({ type: item.type, name: companyName(), slug: item.slug });
@@ -716,16 +824,40 @@ async function researchCompany(item, idx) {
   // durable leadership/governance pages. Only explicit current name + role statements
   // from the corporate domain are accepted, and no profile URL is invented.
   let officialPass = { people: [], stats: null };
-  if (profilePass.people.length < 2) {
-    const officialQueries = buildOfficialLeadershipQueries(comp.website);
-    if (officialQueries.length) {
-      comp.discovery.officialFallbackUsed = true;
-      let officialSerp = [];
-      for (const q of officialQueries) officialSerp = officialSerp.concat(await search(q));
-      officialPass = peopleFromOfficialSources(officialSerp, comp.website, companyName());
-      comp.discovery.rejected.no_explicit_current_leader = Number(
-        officialPass.stats && officialPass.stats.rejected &&
-        officialPass.stats.rejected.no_explicit_current_leader || 0);
+  const websiteUsable = !!(comp.website &&
+    (comp.websiteSource === 'linkedin' || comp.websiteSource === 'search'));
+  if (profilePass.people.length < 2 && websiteUsable) {
+    comp.discovery.officialFallbackUsed = true;
+    comp.discovery.official.used = true;
+    const scan = await readOfficialLeadership(comp.website, companyName());
+    comp.discovery.official.pages = scan.stats.pages;
+    comp.discovery.official.candidates = scan.stats.candidates;
+    comp.discovery.official.accepted = scan.stats.accepted;
+    comp.discovery.official.blocked = scan.stats.blocked;
+    comp.discovery.official.errors = scan.stats.errors || 0;
+    comp.discovery.official.visited = scan.stats.visited || [];
+    for (const [state, count] of Object.entries(scan.stats.states || {})) {
+      comp.discovery.sourceStates[state] = (comp.discovery.sourceStates[state] || 0) + Number(count || 0);
+    }
+    comp.discovery.rejected.no_explicit_current_leader =
+      Number(scan.stats.rejected && scan.stats.rejected.no_explicit_current_leader || 0);
+    officialPass = {
+      people: scan.people,
+      stats: { acceptedCount: scan.stats.accepted, rejected: scan.stats.rejected }
+    };
+    // Keep one bounded Bing search as a second chance for sites whose own
+    // pages are JS-only or blocked. It is never used when the direct crawl
+    // already produced evidence.
+    if (!officialPass.people.length) {
+      const officialQueries = buildOfficialLeadershipQueries(comp.website);
+      if (officialQueries.length) {
+        const officialSerp = await search(officialQueries[0]);
+        const bingPass = peopleFromOfficialSources(officialSerp, comp.website, companyName());
+        if (bingPass.people.length) {
+          officialPass = bingPass;
+          comp.discovery.official.accepted = Number(bingPass.stats.acceptedCount || 0);
+        }
+      }
     }
   }
   const basePeople = mergeEvidencePeople(profilePass.people, officialPass.people);
@@ -762,7 +894,7 @@ async function researchCompany(item, idx) {
       if (!comp.industry && c.industry) comp.industry = cell(c.industry);
       if (!comp.size && c.size) comp.size = cell(c.size);
       if (!comp.hq && c.hq) comp.hq = cell(c.hq);
-      if (!comp.website && c.website) comp.website = cell(c.website);
+      if (!comp.website && c.website) { comp.website = cell(c.website); comp.websiteSource = 'ai'; }
       if (!comp.country && c.country) comp.country = cell(c.country);
       if (comp.factSource === 'none' && (comp.industry || comp.size || comp.hq)) comp.factSource = 'ai';
       aiNote = (out.note || 'ai') +
@@ -883,7 +1015,7 @@ function stopHeartbeat() {
 
 // v1.4: close the hidden worker tabs when the queue stops — frees memory
 async function closeWorkerTabs() {
-  for (const key of ['tabBing', 'tabLI']) {
+  for (const key of ['tabBing', 'tabLI', 'tabOfficial']) {
     const id = S[key];
     if (id) {
       try { await chrome.tabs.remove(id); } catch (e) { /* already closed */ }
