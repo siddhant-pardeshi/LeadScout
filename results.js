@@ -278,6 +278,10 @@ function exportTargets() {
   return ((job && job.results) || []).filter(c => c.status === 'done');
 }
 
+function hasAcceptedProspects(comps) {
+  return comps.some(c => (c.people || []).length > 0);
+}
+
 function filteredExportComps() {
   const comps = exportTargets();
   const filtering = (ui.filter !== 'all') || !!ui.search;
@@ -294,6 +298,7 @@ function filteredExportComps() {
     map.set(r.comp.id, {
       id: r.comp.id, input: r.comp.input, url: r.comp.url, name: r.comp.name,
       industry: r.comp.industry, size: r.comp.size, hq: r.comp.hq, country: r.comp.country,
+      website: r.comp.website,
       outcome: r.comp.outcome, reviewReason: r.comp.reviewReason, reviewDetail: r.comp.reviewDetail,
       people: r.kind === 'person' ? [r.p] : [], hasReview: r.kind !== 'person'
     });
@@ -304,9 +309,10 @@ function filteredExportComps() {
 async function doCopy(core) {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
+  if (!core && !hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
   try {
-    await navigator.clipboard.writeText(buildTSV(comps, { core: core }));
-    toast('Copied ' + (core ? 'core' : 'full') + ' TSV — paste straight into Excel');
+    await navigator.clipboard.writeText(buildTSV(comps, { format: core ? 'legacy' : 'crm' }));
+    toast('Copied ' + (core ? 'legacy 7-column' : 'CRM 10-column') + ' TSV — paste straight into Excel');
   } catch (e) {
     toast('Clipboard blocked — use the .TSV download instead');
   }
@@ -315,13 +321,14 @@ async function doCopy(core) {
 function doDownload(kind) {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
+  if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
   if (kind === 'tsv') {
     download('leadscout-' + stamp() + '.tsv',
-      buildTSV(comps, { core: false }),
+      buildTSV(comps, { format: 'crm' }),
       'text/tab-separated-values;charset=utf-8');
   } else {
     download('leadscout-' + stamp() + '.csv',
-      '\uFEFF' + buildCSV(comps, { core: false }),
+      '\uFEFF' + buildCSV(comps, { format: 'crm' }),
       'text/csv;charset=utf-8');
   }
   toast('Downloaded');

@@ -546,6 +546,10 @@ function exportTargets() {
   return ((job && job.results) || []).filter(c => c.status === 'done');
 }
 
+function hasAcceptedProspects(comps) {
+  return comps.some(c => (c.people || []).length > 0);
+}
+
 /**
  * v1.3 one-click exports: when a filter chip or search is active, export ONLY
  * the visible rows (grouped back by company). Otherwise export everything.
@@ -571,6 +575,7 @@ function filteredExportComps() {
         size: r.comp.size,
         hq: r.comp.hq,
         country: r.comp.country,
+        website: r.comp.website,
         outcome: r.comp.outcome,
         reviewReason: r.comp.reviewReason,
         reviewDetail: r.comp.reviewDetail,
@@ -589,10 +594,11 @@ function filteredExportComps() {
 async function doCopy(core) {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
-  const tsv = buildTSV(comps, { core: core });
+  if (!core && !hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
+  const tsv = buildTSV(comps, { format: core ? 'legacy' : 'crm' });
   try {
     await navigator.clipboard.writeText(tsv);
-    toast('Copied ' + (core ? 'core' : 'full') + ' TSV — paste straight into Excel');
+    toast('Copied ' + (core ? 'legacy 7-column' : 'CRM 10-column') + ' TSV — paste straight into Excel');
   } catch (e) {
     toast('Clipboard blocked — use the .TSV download instead');
   }
@@ -601,13 +607,14 @@ async function doCopy(core) {
 function doDownload(kind) {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
+  if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
   if (kind === 'tsv') {
     download('leadscout-' + stamp() + '.tsv',
-      buildTSV(comps, { core: false }),
+      buildTSV(comps, { format: 'crm' }),
       'text/tab-separated-values;charset=utf-8');
   } else {
     download('leadscout-' + stamp() + '.csv',
-      '\uFEFF' + buildCSV(comps, { core: false }),
+      '\uFEFF' + buildCSV(comps, { format: 'crm' }),
       'text/csv;charset=utf-8');
   }
   toast('Downloaded');

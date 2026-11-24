@@ -4,17 +4,24 @@
 
 # LeadScout
 
-**Research 50–100 companies in one run. Get decision-makers — current roles, verified profile links, emails — straight into Excel as TSV.**
+**Turn a raw company list into CRM-ready, evidence-backed decision-maker rows — without guessing.**
 
-A Chrome / Microsoft Edge extension that replaces the one-company-at-a-time chatbot workflow for B2B lead research.
-Runs in your browser · Bing + company-owned pages · works without any API key · free AI keys optional.
+A Chrome / Microsoft Edge extension for focused B2B lead research. Research 50–100 companies in one run, then copy a strict 10-column CRM export that stays honest when evidence is missing.
+
+**Runs in your browser** · Bing + company-owned pages · works without any API key · free AI keys optional
 
 [![Chrome MV3](https://img.shields.io/badge/Manifest-V3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/)
 [![Edge](https://img.shields.io/badge/Microsoft%20Edge-supported-0078D7?logo=microsoftedge&logoColor=white)](https://www.microsoft.com/edge)
-[![Version](https://img.shields.io/badge/version-1.9.0-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
-[![Tests](https://img.shields.io/badge/tests-70%20passing-34D399)](#-testing--quality)
+[![Version](https://img.shields.io/badge/version-2.0.0-8B5CF6)](https://github.com/siddhant-pardeshi/LeadScout/releases)
+[![Tests](https://img.shields.io/badge/tests-74%20passing-34D399)](#-testing--quality)
 [![License](https://img.shields.io/badge/license-MIT-34D399)](LICENSE)
 [![Bing](https://img.shields.io/badge/search-Bing-008373)](https://www.bing.com)
+
+</div>
+
+<div align="center">
+
+[⚡ Get started](#install)&nbsp;&nbsp;·&nbsp;&nbsp;[📋 See CRM output](#-crm-ready-output)&nbsp;&nbsp;·&nbsp;&nbsp;[🎥 Watch the walkthrough](docs/walkthrough.mp4)&nbsp;&nbsp;·&nbsp;&nbsp;[🛡 Read the evidence rules](#why-the-output-is-trustworthy)
 
 </div>
 
@@ -25,8 +32,14 @@ Runs in your browser · Bing + company-owned pages · works without any API key 
 ---
 
 <div align="center">
-<img src="assets/pipeline.svg" alt="How LeadScout works: your list → Bing → LinkedIn pages → AI enrichment → Excel TSV" width="100%">
+<img src="assets/pipeline.svg" alt="How LeadScout works: your list → Bing → evidence-backed research → CRM TSV" width="100%">
 </div>
+
+## From a list to a lead sheet — without the black box
+
+| ⚡ **Bulk research** | 🛡 **Evidence first** | 📥 **CRM-ready** |
+|---|---|---|
+| Paste a mixed list of 50–100 companies. | Reject invented people, stale roles, and made-up URLs. | Copy the exact 10 columns your workflow expects. |
 
 ## What LeadScout does
 
@@ -34,7 +47,7 @@ You have a list of companies. You need the people who can say yes to AI, softwar
 
 1. **Paste the list** — LinkedIn company URLs, plain company names, or a mix, one per line.
 2. **LeadScout researches each company separately** — its own Bing searches, its own LinkedIn page read, its own optional AI call. Names cannot bleed from Company A into Company B.
-3. **You get an Excel-ready table** — name, designation, country, company, size, industry, LinkedIn URL, email, status, priority, HQ and more.
+3. **You get CRM-ready rows** — a clean 10-column table with a prospect's name, role, email when supported, company facts, website domain, and a real LinkedIn profile only when one was found.
 
 ## Why the output is trustworthy
 
@@ -47,8 +60,18 @@ Four rules are enforced in code, not just promised in a prompt:
 | **Current roles only** | `Former`, `Ex-`, `was`, `previously` and dated past roles are dropped or flagged. A past CEO never becomes today's CEO. |
 | **Emails are honest** | Hunter.io-verified addresses are marked verified. Pattern guesses are labelled `estimated — unverified`. With no source, the cell stays empty. |
 
+## 📋 CRM-ready output
+
+The primary **Copy CRM TSV**, **CRM .TSV**, and **CRM .CSV** actions always use this exact column order — no hidden fields, no reordered headers, and no review-only rows posing as prospects.
+
+| **PROSPECT_FIRST_NAME** | **PROSPECT_LAST_NAME** | **DESIGNATION** | **EMAIL_ID** | **COMPANY_NAME** | **COMPANY_SIZE** | **COUNTRY** | **INDUSTRY_TYPE** | **WEBSITE_NAME** | **LINKEDIN_URL** |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Evidence-backed first name | Remaining name tokens | Current role | Supported email or blank | Canonical company | Source-backed size | Source-backed country | Source-backed industry | Official website domain | Real person LinkedIn profile or blank |
+
+`WEBSITE_NAME` is the canonical company domain when LeadScout has a source-backed public site. `LINKEDIN_URL` is populated only with a real person profile (`/in/` or `/pub/`) — never a company page, evidence link, or generated URL. If no accepted person is found, LeadScout keeps the diagnostic in the results UI and exports no fabricated CRM prospect row.
+
 <div align="center">
-<img src="assets/columns.svg" alt="The Excel output: name, designation, country, company, size, industry, LinkedIn URL, email, status" width="100%">
+<img src="assets/columns.svg" alt="Animated preview of LeadScout's exact ten-column CRM export" width="100%">
 </div>
 
 ---
@@ -77,7 +100,7 @@ Edge is Chromium-based, so the same build runs unchanged — no separate package
 
 - Stay logged into LinkedIn in the same browser profile (the company-page facts are much better).
 - Optional: open ⚙ **Settings → 🔑 API keys** and save a free Groq/Gemini key.
-- Paste companies → **▶ Start research** → **Copy TSV** → paste into Excel.
+- Paste companies → **▶ Start research** → **Copy CRM TSV** → paste into Excel or your CRM importer.
 
 Standard mode takes about 15–25 seconds per company. The queue runs in the background worker, so you can close the popup and keep browsing.
 
@@ -165,11 +188,12 @@ No second Apollo extension is required. If you already have Apollo, keep it — 
 ### 📋 Excel export
 | Feature | What it means for you |
 |---|---|
-| **One-click TSV** | Copies the full 16-column table; paste straight into Excel. |
-| **16 columns** | Name · Designation · Country · Company Name · Company Size · Industry · LinkedIn URL · Email · Email Status · Role Currency · Priority · Verification · HQ · **Company LinkedIn URL** · **Evidence URL** · **Source Type**. The company URL is read from the company's own site (footer/about) when LinkedIn is walled — it is never constructed from a name. |
-| **Core 7-column mode** | Exactly the classic research template: Name, Designation, Country, Company, Size, Industry, LinkedIn URL. |
-| **Filter-aware export** | Filter to C-Suite or Verified-only, then copy exactly that. |
-| **TSV / CSV download** | CSV includes a UTF-8 BOM so “José García” opens correctly in Excel. |
+| **One-click CRM TSV** | Copies the exact 10-column CRM contract; paste straight into Excel or map it into your importer. |
+| **Exact fields** | `PROSPECT_FIRST_NAME` · `PROSPECT_LAST_NAME` · `DESIGNATION` · `EMAIL_ID` · `COMPANY_NAME` · `COMPANY_SIZE` · `COUNTRY` · `INDUSTRY_TYPE` · `WEBSITE_NAME` · `LINKEDIN_URL`. |
+| **Truthful blanks** | Missing email, site, company fact, or person profile stays blank. A company-page evidence link never leaks into `LINKEDIN_URL`. |
+| **Filter-aware export** | Filter to C-Suite or Verified-only, then copy exactly those accepted prospects. If there are none, LeadScout tells you instead of exporting fake review leads. |
+| **TSV / CSV download** | CSV includes a UTF-8 BOM so “José García” opens correctly in Excel; spreadsheet formula-looking values are written as text. |
+| **Compatibility layouts** | The UI retains an explicit legacy 7-column copy action. The internal audit layout remains opt-in for evidence diagnostics, never the default CRM export. |
 
 ### 🎛 Queue and comfort
 - Live progress, people/verified/company counts and ETA.
@@ -254,7 +278,7 @@ Key invariants live in code: profile URLs from real results, AI names grounded i
 ## 🧪 Testing and quality
 
 ```bash
-node tools/test.mjs                  # 70 deterministic checks + MV3/ESM smoke tests
+node tools/test.mjs                  # 74 deterministic checks + MV3/ESM smoke tests
 node tools/diag_linkcheck.mjs        # standalone import-graph check
 node tools/eval-evidence.mjs         # evidence-verifier smoke test
 node tools/live-eval-evidence.mjs --offline   # 11-claim comparison
@@ -296,6 +320,7 @@ The suite covers input parsing, Bing redirect decoding, title extraction, compan
 
 | Version | Highlights |
 |---|---|
+| **2.0.0** | The default copy/download format is now an exact 10-column CRM contract: `PROSPECT_FIRST_NAME`, `PROSPECT_LAST_NAME`, `DESIGNATION`, `EMAIL_ID`, `COMPANY_NAME`, `COMPANY_SIZE`, `COUNTRY`, `INDUSTRY_TYPE`, `WEBSITE_NAME`, `LINKEDIN_URL`. Name splitting is tested; company domains stay source-backed; only real person-profile LinkedIn URLs are exported; review diagnostics never become fabricated CRM prospects. Added a bold GitHub-safe animated CRM export visual and a sharper project landing flow. |
 | **1.9.0** | Company facts from official pages (`companyFactsFromPage`: size, industry, HQ, country, LinkedIn URL) merged from leadership/about/investor pages — never overwriting LinkedIn-verified values; explicit **Company LinkedIn URL** column in the 16-column export plus a link arrow on every company cell; authwall "Join LinkedIn" title rejection; cinematic dark visual system (aurora, grid drift, gradient wordmark, card rise, button sheen, glowing progress) with a light theme and reduced-motion fallback; full-width fixed-layout tables (no clipped columns). Live-verified: Redington 4,025+ employees from its investor page. |
 | **1.8.0** | Indian/enterprise recovery: company-domain probing (`jiobp.com`, `sunpharma.com`), canonical redirects (`redington.group` → `redingtongroup.com`), `/about-us` + `/know-us` + board paths, homepage leadership cards, legal-name domain trust, authwall title guard; live-verified Lupin 12, Redington 8, Sun 8, Welspun 4. |
 | **1.7.1** | Removed the redundant optional `https://*/*` host permission (already covered by required host access); added a manifest regression test. |
@@ -315,7 +340,11 @@ The suite covers input parsing, Bing redirect decoding, title extraction, compan
 
 <div align="center">
 
+<a href="docs/walkthrough.mp4"><img src="docs/walkthrough-poster.png" alt="Watch the LeadScout four-minute walkthrough" width="760"></a>
+
 ### 🎥 [Watch the 4-minute walkthrough](docs/walkthrough.mp4)
+
+<a href="#install"><img src="assets/footer-cta.svg" alt="LeadScout: turn a list into an evidence-backed CRM export — install now" width="100%"></a>
 
 **Built by [siddhant-pardeshi](https://github.com/siddhant-pardeshi)**
 

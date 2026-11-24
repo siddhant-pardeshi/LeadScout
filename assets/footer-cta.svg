@@ -85,7 +85,7 @@
         <path d="M716 200 l5 5 l9 -10" stroke="#34D399" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
           <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.70;1" dur="9s" repeatCount="indefinite"/>
         </path>
-        <text x="748" y="205">Paste companies → export TSV</text>
+        <text x="748" y="205">Paste companies → export CRM TSV</text>
       </g>
     </g>
     <rect x="710" y="228" width="220" height="40" rx="20" fill="#1A1E33" stroke="#8B5CF6">
@@ -99,8 +99,8 @@
     <g clip-path="url(#fframe)">
       <g font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="16" font-weight="700">
         <animateTransform attributeName="transform" type="translate" values="0 0; -1400 0" dur="14s" repeatCount="indefinite"/>
-        <text x="20" y="324" fill="#8B93B8">50–100 companies per run <tspan fill="#C084FC">✦</tspan> current roles only <tspan fill="#34D399">✦</tspan> verified LinkedIn URLs <tspan fill="#C084FC">✦</tspan> Hunter-verified emails <tspan fill="#34D399">✦</tspan> filter-aware TSV export <tspan fill="#C084FC">✦</tspan> pause · resume · refresh <tspan fill="#34D399">✦</tspan> free AI keys <tspan fill="#C084FC">✦</tspan> </text>
-        <text x="1420" y="324" fill="#8B93B8">50–100 companies per run <tspan fill="#C084FC">✦</tspan> current roles only <tspan fill="#34D399">✦</tspan> verified LinkedIn URLs <tspan fill="#C084FC">✦</tspan> Hunter-verified emails <tspan fill="#C084FC">✦</tspan> filter-aware TSV export <tspan fill="#C084FC">✦</tspan> pause · resume · refresh <tspan fill="#34D399">✦</tspan> free AI keys <tspan fill="#C084FC">✦</tspan> </text>
+        <text x="20" y="324" fill="#8B93B8">50–100 companies per run <tspan fill="#C084FC">✦</tspan> current roles only <tspan fill="#34D399">✦</tspan> real LinkedIn profiles only <tspan fill="#C084FC">✦</tspan> honest email status <tspan fill="#34D399">✦</tspan> 10-column CRM export <tspan fill="#C084FC">✦</tspan> pause · resume · refresh <tspan fill="#34D399">✦</tspan> free AI keys <tspan fill="#C084FC">✦</tspan> </text>
+        <text x="1420" y="324" fill="#8B93B8">50–100 companies per run <tspan fill="#C084FC">✦</tspan> current roles only <tspan fill="#34D399">✦</tspan> real LinkedIn profiles only <tspan fill="#C084FC">✦</tspan> honest email status <tspan fill="#34D399">✦</tspan> 10-column CRM export <tspan fill="#C084FC">✦</tspan> pause · resume · refresh <tspan fill="#34D399">✦</tspan> free AI keys <tspan fill="#C084FC">✦</tspan> </text>
       </g>
     </g>
   </g>

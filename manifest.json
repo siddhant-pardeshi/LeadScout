@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "LeadScout — Bulk Decision-Maker Finder",
   "short_name": "LeadScout",
-  "version": "1.9.0",
-  "description": "Bulk research 50–100 companies: verified decision-makers, current roles, emails, Excel-ready TSV. Free AI keys optional.",
+  "version": "2.0.0",
+  "description": "Bulk research 50–100 companies: evidence-backed decision-makers, current roles, honest emails, CRM-ready TSV. Free AI keys optional.",
   "homepage_url": "https://github.com/siddhant-pardeshi/LeadScout",
   "permissions": [
     "storage",

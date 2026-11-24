@@ -109,8 +109,8 @@
       <line x1="1062" y1="103" x2="1098" y2="103" stroke="#34D399" stroke-width="2.5"/>
       <line x1="1062" y1="112" x2="1098" y2="112" stroke="#34D399" stroke-width="2.5"/>
       <line x1="1080" y1="94" x2="1080" y2="122" stroke="#34D399" stroke-width="2.5"/>
-      <text x="1072" y="142" text-anchor="middle" font-size="17" font-weight="700" fill="#E7E9F2">Excel TSV</text>
-      <text x="1072" y="160" text-anchor="middle" font-size="12.5" fill="#8A92AD">one click</text>
+      <text x="1072" y="142" text-anchor="middle" font-size="17" font-weight="700" fill="#E7E9F2">CRM TSV</text>
+      <text x="1072" y="160" text-anchor="middle" font-size="12.5" fill="#8A92AD">10 columns · one click</text>
     </g>
 
     <!-- travelling glow behind the whole flow -->

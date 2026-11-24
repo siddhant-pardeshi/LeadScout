@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {
   parseInputs, slugFromUrl, titleCaseSlug, decodeBingUrl, parseProfileTitle,
   linkedinHandle, companyMatch, companyMatchPartial, domainFromWebsite, emailFor,
-  buildTSV, buildCSV, extractSizeFromText, overlapTokens, kebabName, slugScore,
+  buildTSV, buildCSV, splitProspectName, CRM_EXPORT_HEADERS, extractSizeFromText, overlapTokens, kebabName, slugScore,
   looseResolveMatch, roleCurrency, matchHunterEmail, cell, exportCell, nameEvidence,
   officialLeadershipCandidate, inferWebsiteFromSerp, officialPageCandidate, classifyOutcome,
   domainMatchesCompany, websiteCandidates, companyFactsFromPage
@@ -22,6 +22,12 @@ function T(name, fn) {
   try { fn(); passed++; console.log('  ok  ' + name); }
   catch (e) { failed++; console.log('FAIL  ' + name + '  → ' + e.message); }
 }
+
+const CRM_EXPORT_CONTRACT = [
+  'PROSPECT_FIRST_NAME', 'PROSPECT_LAST_NAME', 'DESIGNATION', 'EMAIL_ID',
+  'COMPANY_NAME', 'COMPANY_SIZE', 'COUNTRY', 'INDUSTRY_TYPE', 'WEBSITE_NAME',
+  'LINKEDIN_URL'
+];
 
 T('manifest: optional host permissions are not redundant with required hosts', () => {
   const manifest = JSON.parse(fs.readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
@@ -632,10 +638,21 @@ T('cell prevents spreadsheet formula injection', () => {
   assert.equal(exportCell('Plain text'), 'Plain text');
 });
 
-T('buildTSV: header + rows + review row + full columns', () => {
+T('splitProspectName: keeps global name tokens without guessing', () => {
+  assert.deepEqual(splitProspectName('Jane Doe'), { firstName: 'Jane', lastName: 'Doe' });
+  assert.deepEqual(splitProspectName('Ana María de la Cruz'), { firstName: 'Ana', lastName: 'María de la Cruz' });
+  assert.deepEqual(splitProspectName('Dr. Jean-Claude Van Damme'), { firstName: 'Jean-Claude', lastName: 'Van Damme' });
+  assert.deepEqual(splitProspectName('Dr. Jane Doe, PhD'), { firstName: 'Jane', lastName: 'Doe' });
+  assert.deepEqual(splitProspectName('Cher'), { firstName: 'Cher', lastName: '' });
+  assert.deepEqual(splitProspectName('Doe, Jane'), { firstName: '', lastName: '' });
+  assert.deepEqual(splitProspectName(null), { firstName: '', lastName: '' });
+});
+
+T('buildTSV: default is the exact 10-column CRM contract', () => {
   const comps = [{
     name: 'Acme Corp', country: 'India', size: '201-500 employees',
-    industry: 'Software Development', url: 'https://www.linkedin.com/company/acme/',
+    industry: 'Software Development', website: 'https://www.acme.example/about',
+    url: 'https://www.linkedin.com/company/acme/',
     people: [
       { name: 'Jane Doe', designation: 'Chief Technology Officer', url: 'https://www.linkedin.com/in/jane/', urlVerified: true, currentEmployer: 'current', pri: 1, score: 110, priority: 'P1', email: 'jane.doe@acme.io', emailStatus: 'estimated — unverified' },
       { name: 'Bob Lee', designation: 'Head of Product', url: '', urlVerified: false, pri: 2, score: 90, priority: 'P2' }
@@ -643,25 +660,42 @@ T('buildTSV: header + rows + review row + full columns', () => {
   }, {
     name: 'Empty Co', people: [], url: ''
   }];
-  const full = buildTSV(comps, { core: false });
-  const lines = full.split('\n');
-  assert.equal(lines[0].split('\t').length, 16);
-  assert.ok(lines[1].includes('Jane Doe'));
-  assert.ok(lines[1].includes('Verified'));
-  assert.ok(lines[2].includes('Unverified'));
-  assert.ok(full.includes('Empty Co'));
-  assert.ok(full.includes('needs manual review'));
+  const crm = buildTSV(comps);
+  const lines = crm.split('\n').filter(Boolean);
+  assert.deepEqual(CRM_EXPORT_HEADERS, CRM_EXPORT_CONTRACT);
+  assert.deepEqual(lines[0].split('\t'), CRM_EXPORT_CONTRACT);
+  assert.equal(lines.length, 3); // header + accepted people; no fake review prospect
+  const jane = lines[1].split('\t');
+  assert.deepEqual(jane, [
+    'Jane', 'Doe', 'Chief Technology Officer', 'jane.doe@acme.io', 'Acme Corp',
+    '201-500 employees', 'India', 'Software Development', 'acme.example',
+    'https://www.linkedin.com/in/jane/'
+  ]);
+  const bob = lines[2].split('\t');
+  assert.equal(bob[0], 'Bob');
+  assert.equal(bob[1], 'Lee');
+  assert.equal(bob[3], '');
+  assert.equal(bob[9], '');
 
-  const core = buildTSV(comps, { core: true });
+  const core = buildTSV(comps, { format: 'legacy' });
   assert.equal(core.split('\n')[0].split('\t').length, 7);
 });
 
-T('buildCSV quotes commas properly', () => {
+T('buildTSV: CRM export emits no manufactured row for a review-only company', () => {
+  const crm = buildTSV([{ name: 'Empty Co', people: [], reviewReason: 'Needs manual review' }]);
+  assert.deepEqual(crm.trim().split('\n'), [CRM_EXPORT_CONTRACT.join('\t')]);
+  const audit = buildTSV([{ name: 'Empty Co', people: [], reviewReason: 'Needs manual review' }], { format: 'audit' });
+  assert.equal(audit.trim().split('\n').length, 2);
+  assert.match(audit, /Needs manual review/);
+});
+
+T('buildCSV: CRM export quotes commas properly', () => {
   const comps = [{
     name: 'Acme, Inc.', country: '', size: '', industry: '', url: '',
     people: [{ name: 'A B', designation: 'CTO', url: '', urlVerified: false, pri: 1, score: 1, priority: 'P1' }]
   }];
-  const csv = buildCSV(comps, { core: true });
+  const csv = buildCSV(comps);
+  assert.deepEqual(csv.split('\r\n')[0].split(','), CRM_EXPORT_CONTRACT);
   assert.ok(csv.includes('"Acme, Inc."'));
 });
 
@@ -671,13 +705,14 @@ T('buildTSV applies spreadsheet formula protection at export time', () => {
       name: '+Formula Person', designation: 'CTO', url: '', urlVerified: false,
       pri: 1, score: 1, priority: 'P1'
     }]
-  }], { core: true });
+  }]);
   const row = tsv.split('\n')[1].split('\t');
-  assert.equal(row[0], "'+Formula Person");
-  assert.equal(row[3], "'=Danger Co");
+  assert.equal(row[0], "'+Formula");
+  assert.equal(row[1], 'Person');
+  assert.equal(row[4], "'=Danger Co");
 });
 
-T('buildTSV: full export carries official evidence without changing core URL semantics', () => {
+T('buildTSV: official-source CRM row keeps evidence out of LinkedIn URL', () => {
   const comps = [{
     name: 'Acme Corp', website: 'https://acme.example', url: 'https://www.linkedin.com/company/acme/', people: [{
       name: 'Asha Shah', designation: 'Chief Technology Officer', url: '',
@@ -686,30 +721,48 @@ T('buildTSV: full export carries official evidence without changing core URL sem
       pri: 1, score: 100, priority: 'P1'
     }]
   }];
-  const full = buildTSV(comps, { core: false });
-  assert.equal(full.split('\n')[0].split('\t').length, 16);
-  assert.match(full.split('\n')[0], /LinkedIn URL/);
-  const row = full.split('\n')[1].split('\t');
-  assert.equal(row[6], '');
+  const crm = buildTSV(comps);
+  const crmRow = crm.split('\n')[1].split('\t');
+  assert.equal(crmRow[8], 'acme.example');
+  assert.equal(crmRow[9], '');
+  assert.equal(crm.includes('https://acme.example/leadership'), false);
+  const audit = buildTSV(comps, { format: 'audit' });
+  const row = audit.split('\n')[1].split('\t');
   assert.equal(row[13], 'https://www.linkedin.com/company/acme/');
   assert.equal(row[14], 'https://acme.example/leadership');
   assert.equal(row[15], 'Official company source');
-  assert.match(full, /Official company source/);
-  const core = buildTSV(comps, { core: true });
+  const core = buildTSV(comps, { format: 'legacy' });
   assert.equal(core.split('\n')[1].split('\t')[6], '');
 });
 
-T('buildCSV: Unicode, quoting and formula safety', () => {
+T('buildTSV: CRM LinkedIn field rejects a company page', () => {
+  const tsv = buildTSV([{
+    name: 'Acme Corp', people: [{
+      name: 'Jane Doe', designation: 'CTO',
+      url: 'https://www.linkedin.com/company/acme/'
+    }]
+  }]);
+  assert.equal(tsv.split('\n')[1].split('\t')[9], '');
+});
+
+T('buildCSV: CRM Unicode, quoting and formula safety', () => {
   const csv = buildCSV([{
     name: 'Acme, Inc.', people: [{
       name: 'José García', designation: 'CTO', url: '', urlVerified: false,
       pri: 1, score: 1, priority: 'P1', email: '=SUM(1,1)', emailStatus: 'estimated — unverified'
     }]
-  }], { core: false });
+  }]);
   assert.ok(csv.includes('"Acme, Inc."'));
-  assert.ok(csv.includes('José García'));
+  assert.ok(csv.includes('José,García'));
   assert.ok(csv.includes("'=SUM(1,1)"));
-  assert.ok(csv.includes('estimated — unverified'));
+  assert.equal(csv.includes('estimated — unverified'), false);
+});
+
+T('filtered UI exports retain WEBSITE_NAME in popup and full results', () => {
+  const popup = fs.readFileSync(new URL('../popup.js', import.meta.url), 'utf8');
+  const results = fs.readFileSync(new URL('../results.js', import.meta.url), 'utf8');
+  assert.match(popup, /website:\s*r\.comp\.website/);
+  assert.match(results, /website:\s*r\.comp\.website/);
 });
 
 // ---- v1.3 role currency (latest designation, not past) ----
@@ -876,8 +929,8 @@ T('matchHunterEmail: no match → null (pattern estimation takes over)', () => {
   assert.equal(matchHunterEmail('Jane Doe', [], null, null), null);
 });
 
-// ---- v1.3 export columns ----
-T('buildTSV v1.3: 16 columns incl. Role Currency, HQ and evidence', () => {
+// ---- optional audit export ------------------------------------------------
+T('buildTSV audit format: 16 columns incl. Role Currency, HQ and evidence', () => {
   const comps = [{
     name: 'Acme Corp', country: 'India', hq: 'Bengaluru, Karnataka, India',
     size: '201-500 employees', industry: 'Software Development',
@@ -886,7 +939,7 @@ T('buildTSV v1.3: 16 columns incl. Role Currency, HQ and evidence', () => {
       urlVerified: true, currentEmployer: 'current', pri: 1, score: 110, priority: 'P1',
       email: 'jane.doe@acme.io', emailStatus: 'verified via Hunter.io' }]
   }];
-  const full = buildTSV(comps, { core: false });
+  const full = buildTSV(comps, { format: 'audit' });
   const head = full.split('\n')[0].split('\t');
   assert.equal(head.length, 16);
   assert.equal(head[9], 'Role Currency');
@@ -896,7 +949,7 @@ T('buildTSV v1.3: 16 columns incl. Role Currency, HQ and evidence', () => {
   assert.equal(head[15], 'Source Type');
   const row = full.split('\n')[1].split('\t');
   assert.equal(row[9], 'Current');
-  const core = buildTSV(comps, { core: true });
+  const core = buildTSV(comps, { format: 'legacy' });
   assert.equal(core.split('\n')[0].split('\t').length, 7); // user's original template
 });
 
