@@ -1,6 +1,7 @@
 // LeadScout — popup controller (part 1: helpers, state, progress)
 
-import { DEFAULT_SETTINGS, parseInputs, buildCSV, fmtEta } from './lib/parse.js';
+import { DEFAULT_SETTINGS, parseInputs, buildCSV, fmtEta,
+  splitProspectName, linkedinUrlForExport, websiteNameForExport } from './lib/parse.js';
 import { KEY_PROVIDERS, KEY_LABELS, normalizeKeyMeta, keyStatus, fmtDate, localDateStr, isDateStr } from './lib/keys.js';
 import { extensionContextOk, extensionsUrl } from './lib/platform.js';
 import { extractLinkedInCompany } from './lib/extract.js';
@@ -264,13 +265,6 @@ function rowMatches(r, filter, search) {
   return true;
 }
 
-function pillEl(cls, txt) {
-  const s = document.createElement('span');
-  s.className = 'pill ' + cls;
-  s.textContent = txt;
-  return s;
-}
-
 function companyCell(comp) {
   const td = tdText(comp.name || comp.input || '', 'co');
   if (comp.url) {
@@ -324,19 +318,6 @@ function reviewDisplay(comp) {
   };
 }
 
-function verificationDisplay(person) {
-  if (person.urlVerified) return { text: 'VERIFIED', cls: 'v' };
-  if (person.sourceType === 'official') return { text: 'OFFICIAL', cls: 'v' };
-  return { text: 'UNVERIFIED', cls: 'u' };
-}
-
-function roleDisplay(person) {
-  if (person.currentEmployer === 'current') return { text: 'CURRENT', cls: 'v', title: 'Role at this company is title-verified (current)' };
-  if (person.currentEmployer === 'official') return { text: 'OFFICIAL', cls: 'v', title: 'Current role stated by the company-owned source linked in this row' };
-  if (person.currentEmployer === 'snippet') return { text: 'SNIPPET', cls: 'est', title: 'Company seen in the search snippet, with no past-role markers' };
-  return { text: 'PAST?', cls: 'u', title: 'Contradictory signals — may be a past role, verify manually' };
-}
-
 // v1.4 lag fix: the table is expensive to rebuild — only re-render when the
 // underlying data actually changed (poll runs every 800 ms).
 let lastResultsKey = '';
@@ -370,61 +351,57 @@ function renderResults(force) {
     if (r.kind === 'review') {
       const review = reviewDisplay(r.comp);
       tr.appendChild(tdText('—', 'ds'));
+      tr.appendChild(tdText('—', 'ds'));
       const reason = tdText(review.text, 'ds');
       reason.title = review.title;
       tr.appendChild(reason);
+      tr.appendChild(tdText('—', 'ds'));
       tr.appendChild(companyCell(r.comp));
-      const tdL = document.createElement('td');
-      if (r.comp.url) tdL.appendChild(linkEl(r.comp.url, 'page'));
-      else tdL.appendChild(document.createTextNode('—'));
-      tr.appendChild(tdL);
-      const tdF = document.createElement('td');
-      tdF.appendChild(pillEl(review.cls, review.pill));
-      tr.appendChild(tdF);
+      tr.appendChild(tdText(r.comp.size || '', 'ds'));
+      tr.appendChild(tdText(r.comp.country || '', 'ds'));
+      tr.appendChild(tdText(r.comp.industry || '', 'ds'));
+      tr.appendChild(tdText(websiteNameForExport(r.comp.website), 'ds'));
+      tr.appendChild(tdText('—', 'ds'));
       frag.appendChild(tr);
       continue;
     }
 
     const p = r.p;
-    tr.appendChild(tdText(p.name, 'nm'));
+    const c = r.comp;
+    const name = splitProspectName(p.name);
+
+    tr.appendChild(tdText(name.firstName, 'nm'));
+    tr.appendChild(tdText(name.lastName, 'nm'));
 
     const tdD = document.createElement('td');
     tdD.className = 'ds';
-    const desigDiv = document.createElement('div');
-    desigDiv.textContent = p.designation || '';
-    tdD.appendChild(desigDiv);
-    if (p.email) {
-      const mailDiv = document.createElement('div');
-      mailDiv.className = 'est-mail';
-      mailDiv.title = p.emailStatus || 'Email status unavailable';
-      mailDiv.textContent = '✉ ' + p.email;
-      tdD.appendChild(mailDiv);
-    }
+    tdD.textContent = p.designation || '';
     tr.appendChild(tdD);
 
-    const tdCo = companyCell(r.comp);
-    if (r.comp.aiNote) tdCo.title = r.comp.aiNote;
+    const tdE = document.createElement('td');
+    tdE.className = 'est-mail';
+    if (p.email) {
+      tdE.textContent = p.email;
+      tdE.title = p.emailStatus || 'Email status unavailable';
+    } else {
+      tdE.textContent = '—';
+    }
+    tr.appendChild(tdE);
+
+    const tdCo = companyCell(c);
+    if (c.aiNote) tdCo.title = c.aiNote;
     tr.appendChild(tdCo);
 
+    tr.appendChild(tdText(c.size || '', 'ds'));
+    tr.appendChild(tdText(c.country || '', 'ds'));
+    tr.appendChild(tdText(c.industry || '', 'ds'));
+    tr.appendChild(tdText(websiteNameForExport(c.website), 'ds'));
+
+    const profileUrl = linkedinUrlForExport(p.url);
     const tdL = document.createElement('td');
-    if (p.url) tdL.appendChild(linkEl(p.url, 'profile'));
-    else if (p.evidenceUrl) tdL.appendChild(linkEl(p.evidenceUrl, 'evidence'));
+    if (profileUrl) tdL.appendChild(linkEl(profileUrl, 'profile'));
     else tdL.appendChild(document.createTextNode('—'));
     tr.appendChild(tdL);
-
-    const tdF = document.createElement('td');
-    tdF.appendChild(pillEl('p' + (p.pri || 5), p.priority || 'P5'));
-    tdF.appendChild(document.createTextNode(' '));
-    const verify = verificationDisplay(p);
-    tdF.appendChild(pillEl(verify.cls, verify.text));
-    if (p.currentEmployer) {
-      tdF.appendChild(document.createTextNode(' '));
-      const role = roleDisplay(p);
-      const rolePill = pillEl(role.cls, role.text);
-      rolePill.title = role.title;
-      tdF.appendChild(rolePill);
-    }
-    tr.appendChild(tdF);
 
     frag.appendChild(tr);
   }

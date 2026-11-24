@@ -735,26 +735,35 @@ textarea:focus, select:focus, .text-input:focus {
     transition-duration: 0.001ms !important;
   }
 }
-/* Responsive tables: fixed columns prevent the Flags/Email columns from clipping */
-.content .res-table { table-layout: fixed; }
-.content .res-table th:nth-child(1), .content .res-table td:nth-child(1) { width: 18%; }
-.content .res-table th:nth-child(2), .content .res-table td:nth-child(2) { width: 22%; }
-.content .res-table th:nth-child(3), .content .res-table td:nth-child(3) { width: 20%; }
-.content .res-table th:nth-child(4), .content .res-table td:nth-child(4) { width: 16%; }
-.content .res-table th:nth-child(5), .content .res-table td:nth-child(5) { width: 24%; }
-.content .res-table td { overflow-wrap: anywhere; }
+/* Responsive tables: the popup grid mirrors the 10-column CSV contract.
+   Ten columns cannot fit 470px, so the wrapper scrolls horizontally. */
+.content .table-wrap { overflow-x: auto; }
+.content .res-table { table-layout: fixed; min-width: 900px; }
+.content .res-table th { font-size: 8.6px; padding: 5px 6px; }
+.content .res-table td { font-size: 10.6px; padding: 4px 6px; overflow-wrap: anywhere; }
+.content .res-table th:nth-child(1), .content .res-table td:nth-child(1) { width: 8%; }
+.content .res-table th:nth-child(2), .content .res-table td:nth-child(2) { width: 9%; }
+.content .res-table th:nth-child(3), .content .res-table td:nth-child(3) { width: 15%; }
+.content .res-table th:nth-child(4), .content .res-table td:nth-child(4) { width: 14%; }
+.content .res-table th:nth-child(5), .content .res-table td:nth-child(5) { width: 10%; }
+.content .res-table th:nth-child(6), .content .res-table td:nth-child(6) { width: 9%; }
+.content .res-table th:nth-child(7), .content .res-table td:nth-child(7) { width: 7%; }
+.content .res-table th:nth-child(8), .content .res-table td:nth-child(8) { width: 10%; }
+.content .res-table th:nth-child(9), .content .res-table td:nth-child(9) { width: 9%; }
+.content .res-table th:nth-child(10), .content .res-table td:nth-child(10) { width: 9%; }
 
 .results-main .table-wrap { overflow: auto; }
-.results-main .res-table { table-layout: fixed; min-width: 980px; }
-.results-main .res-table th:nth-child(1), .results-main .res-table td:nth-child(1) { width: 11%; }
-.results-main .res-table th:nth-child(2), .results-main .res-table td:nth-child(2) { width: 18%; }
-.results-main .res-table th:nth-child(3), .results-main .res-table td:nth-child(3) { width: 8%; }
-.results-main .res-table th:nth-child(4), .results-main .res-table td:nth-child(4) { width: 12%; }
+.results-main .res-table { table-layout: fixed; min-width: 1180px; }
+.results-main .res-table th:nth-child(1), .results-main .res-table td:nth-child(1) { width: 8%; }
+.results-main .res-table th:nth-child(2), .results-main .res-table td:nth-child(2) { width: 9%; }
+.results-main .res-table th:nth-child(3), .results-main .res-table td:nth-child(3) { width: 15%; }
+.results-main .res-table th:nth-child(4), .results-main .res-table td:nth-child(4) { width: 13%; }
 .results-main .res-table th:nth-child(5), .results-main .res-table td:nth-child(5) { width: 10%; }
-.results-main .res-table th:nth-child(6), .results-main .res-table td:nth-child(6) { width: 11%; }
-.results-main .res-table th:nth-child(7), .results-main .res-table td:nth-child(7) { width: 9%; }
-.results-main .res-table th:nth-child(8), .results-main .res-table td:nth-child(8) { width: 12%; }
+.results-main .res-table th:nth-child(6), .results-main .res-table td:nth-child(6) { width: 9%; }
+.results-main .res-table th:nth-child(7), .results-main .res-table td:nth-child(7) { width: 7%; }
+.results-main .res-table th:nth-child(8), .results-main .res-table td:nth-child(8) { width: 10%; }
 .results-main .res-table th:nth-child(9), .results-main .res-table td:nth-child(9) { width: 9%; }
+.results-main .res-table th:nth-child(10), .results-main .res-table td:nth-child(10) { width: 10%; }
 .results-main .res-table td { overflow-wrap: anywhere; }
 
 @media (max-width: 760px) {

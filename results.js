@@ -1,6 +1,7 @@
 // LeadScout — full-page results view
 
-import { DEFAULT_SETTINGS, buildCSV, fmtEta } from './lib/parse.js';
+import { DEFAULT_SETTINGS, buildCSV, fmtEta, splitProspectName,
+  linkedinUrlForExport, websiteNameForExport } from './lib/parse.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -74,13 +75,6 @@ function rowMatches(r, filter, search) {
   return true;
 }
 
-function pillEl(cls, txt) {
-  const s = document.createElement('span');
-  s.className = 'pill ' + cls;
-  s.textContent = txt;
-  return s;
-}
-
 function tdText(text, cls) {
   const td = document.createElement('td');
   if (cls) td.className = cls;
@@ -134,19 +128,6 @@ function reviewDisplay(comp) {
   };
 }
 
-function verificationDisplay(person) {
-  if (person.urlVerified) return { text: 'VERIFIED', cls: 'v' };
-  if (person.sourceType === 'official') return { text: 'OFFICIAL', cls: 'v' };
-  return { text: 'UNVERIFIED', cls: 'u' };
-}
-
-function roleDisplay(person) {
-  if (person.currentEmployer === 'current') return { text: 'CURRENT', cls: 'v', title: 'Role at this company is title-verified (current)' };
-  if (person.currentEmployer === 'official') return { text: 'OFFICIAL', cls: 'v', title: 'Current role stated by the company-owned source linked in this row' };
-  if (person.currentEmployer === 'snippet') return { text: 'SNIPPET', cls: 'est', title: 'Company seen in the search snippet, with no past-role markers' };
-  return { text: 'PAST?', cls: 'u', title: 'Contradictory signals — may be a past role, verify manually' };
-}
-
 // v1.4 lag fix: rebuild the table only when data actually changed
 let lastKey = '';
 
@@ -180,50 +161,37 @@ function render(force) {
     const tr = document.createElement('tr');
 
     if (r.kind === 'review') {
+      // Company diagnostics render across the same ten columns so the
+      // on-screen grid always matches the CSV contract.
       const review = reviewDisplay(r.comp);
+      tr.appendChild(tdText('—', 'ds'));
       tr.appendChild(tdText('—', 'ds'));
       const reason = tdText(review.text, 'ds');
       reason.title = review.title;
       tr.appendChild(reason);
-      tr.appendChild(tdText(r.comp.country || '', 'ds'));
-      tr.appendChild(companyCell(r.comp));
+      tr.appendChild(tdText('—', 'ds'));
+      const tdCo = companyCell(r.comp);
+      tr.appendChild(tdCo);
       tr.appendChild(tdText(r.comp.size || '', 'ds'));
+      tr.appendChild(tdText(r.comp.country || '', 'ds'));
       tr.appendChild(tdText(r.comp.industry || '', 'ds'));
-      const tdL = document.createElement('td');
-      if (r.comp.url) tdL.appendChild(linkEl(r.comp.url, 'page'));
-      else tdL.appendChild(document.createTextNode('—'));
-      tr.appendChild(tdL);
-      tr.appendChild(tdText('', ''));
-      const tdF = document.createElement('td');
-      tdF.appendChild(pillEl(review.cls, review.pill));
-      tr.appendChild(tdF);
+      tr.appendChild(tdText(websiteNameForExport(r.comp.website), 'ds'));
+      tr.appendChild(tdText('—', 'ds'));
       frag.appendChild(tr);
       continue;
     }
 
     const p = r.p;
     const c = r.comp;
-    tr.appendChild(tdText(p.name, 'nm'));
+    const name = splitProspectName(p.name);
+
+    tr.appendChild(tdText(name.firstName, 'nm'));
+    tr.appendChild(tdText(name.lastName, 'nm'));
 
     const tdD = document.createElement('td');
     tdD.className = 'ds';
-    const desigDiv = document.createElement('div');
-    desigDiv.textContent = p.designation || '';
-    tdD.appendChild(desigDiv);
+    tdD.textContent = p.designation || '';
     tr.appendChild(tdD);
-
-    tr.appendChild(tdText(c.country || '', 'ds'));
-    const tdCo = companyCell(c);
-    if (c.aiNote) tdCo.title = c.aiNote;
-    tr.appendChild(tdCo);
-    tr.appendChild(tdText(c.size || '', 'ds'));
-    tr.appendChild(tdText(c.industry || '', 'ds'));
-
-    const tdL = document.createElement('td');
-    if (p.url) tdL.appendChild(linkEl(p.url, 'profile'));
-    else if (p.evidenceUrl) tdL.appendChild(linkEl(p.evidenceUrl, 'evidence'));
-    else tdL.appendChild(document.createTextNode('—'));
-    tr.appendChild(tdL);
 
     const tdE = document.createElement('td');
     tdE.className = 'est-mail';
@@ -235,19 +203,20 @@ function render(force) {
     }
     tr.appendChild(tdE);
 
-    const tdF = document.createElement('td');
-    tdF.appendChild(pillEl('p' + (p.pri || 5), p.priority || 'P5'));
-    tdF.appendChild(document.createTextNode(' '));
-    const verify = verificationDisplay(p);
-    tdF.appendChild(pillEl(verify.cls, verify.text));
-    if (p.currentEmployer) {
-      tdF.appendChild(document.createTextNode(' '));
-      const role = roleDisplay(p);
-      const rolePill = pillEl(role.cls, role.text);
-      rolePill.title = role.title;
-      tdF.appendChild(rolePill);
-    }
-    tr.appendChild(tdF);
+    const tdCo = companyCell(c);
+    if (c.aiNote) tdCo.title = c.aiNote;
+    tr.appendChild(tdCo);
+
+    tr.appendChild(tdText(c.size || '', 'ds'));
+    tr.appendChild(tdText(c.country || '', 'ds'));
+    tr.appendChild(tdText(c.industry || '', 'ds'));
+    tr.appendChild(tdText(websiteNameForExport(c.website), 'ds'));
+
+    const profileUrl = linkedinUrlForExport(p.url);
+    const tdL = document.createElement('td');
+    if (profileUrl) tdL.appendChild(linkEl(profileUrl, 'profile'));
+    else tdL.appendChild(document.createTextNode('—'));
+    tr.appendChild(tdL);
 
     frag.appendChild(tr);
   }
