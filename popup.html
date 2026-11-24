@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <title>LeadScout</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 128 128" aria-hidden="true">
+        <defs>
+          <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#4F46E5"/>
+            <stop offset="1" stop-color="#9333EA"/>
+          </linearGradient>
+        </defs>
+        <rect width="128" height="128" rx="28" fill="url(#lg)"/>
+        <circle cx="56" cy="54" r="25" fill="none" stroke="#fff" stroke-width="13"/>
+        <line x1="75" y1="72" x2="99" y2="96" stroke="#fff" stroke-width="13" stroke-linecap="round"/>
+        <circle cx="49" cy="48" r="6" fill="#fff"/>
+        <circle cx="63" cy="43" r="6" fill="#fff"/>
+        <circle cx="58" cy="61" r="6" fill="#fff"/>
+      </svg>
+      <div class="brand-text">
+        <h1>LeadScout</h1>
+        <span class="tagline">Bulk decision-maker research</span>
+        <div class="hero-badges" aria-hidden="true">
+          <span>◈ Evidence-first</span><span>⚡ Bulk</span><span>▦ Excel-ready</span>
+        </div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button id="btnTheme" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">◐</button>
+      <button id="btnSettings" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <div id="swBanner" class="banner err hidden"></div>
+    <div id="keyBanner" class="banner warn hidden"></div>
+    <!-- ============ INPUT CARD ============ -->
+    <section class="card" id="cardInput">
+      <div class="card-head">
+        <h2>1 · Companies to research</h2>
+        <span id="inputCount" class="count-badge">0</span>
+      </div>
+      <textarea id="companyInput" rows="7"
+        placeholder="Paste one per line:&#10;https://www.linkedin.com/company/acme-corp/&#10;Acme Corp&#10;Globex - https://www.linkedin.com/company/globex/"></textarea>
+      <div class="input-toolbar">
+        <button id="btnAddCurrent" class="btn ghost small">＋ Add current LinkedIn page</button>
+        <button id="btnSample" class="btn ghost small">Sample</button>
+        <button id="btnClearInput" class="btn ghost small">Clear</button>
+      </div>
+
+      <div class="card-head mt">
+        <h2>2 · Options</h2>
+      </div>
+      <div class="options-grid">
+        <label class="opt">
+          <span>Scan depth</span>
+          <select id="optMode">
+            <option value="quick">Quick — 1 search / company</option>
+            <option value="standard" selected>Standard — 2 searches / company</option>
+            <option value="deep">Deep — 4 searches / company</option>
+          </select>
+        </label>
+        <label class="opt">
+          <span>AI enrichment</span>
+          <select id="optProvider">
+            <option value="none">None (Bing only)</option>
+            <option value="groq" selected>Groq (free key)</option>
+            <option value="gemini">Gemini (free key, web-grounded)</option>
+            <option value="openrouter">OpenRouter (free models)</option>
+            <option value="custom">Custom OpenAI-compatible</option>
+          </select>
+        </label>
+      </div>
+      <div class="switches">
+        <label class="switch"><input type="checkbox" id="optDeepScan" checked><span class="track"></span><span>Read LinkedIn pages for verified company facts</span></label>
+        <label class="switch"><input type="checkbox" id="optEmails" checked><span class="track"></span><span>Include estimated emails (pattern-based, flagged unverified)</span></label>
+      </div>
+      <button id="btnStart" class="btn primary big">▶&nbsp; Start research</button>
+      <p class="hint" id="startHint">Standard mode ≈ 15–25 s per company. Keep this Chrome window open.</p>
+    </section>
+
+    <!-- ============ PROGRESS CARD ============ -->
+    <section class="card hidden" id="cardProgress">
+      <div class="card-head">
+        <h2>Progress</h2>
+        <span id="progCount" class="count-badge">0 / 0</span>
+      </div>
+      <div class="progress-track"><div id="progBar" class="progress-fill"></div></div>
+      <div class="prog-meta">
+        <span id="progLabel">Idle</span>
+        <span id="progEta">ETA —</span>
+      </div>
+      <div class="stats-row" id="statsRow">
+        <div class="stat-tile"><div class="v" id="statPeople">0</div><div class="k">People</div></div>
+        <div class="stat-tile"><div class="v" id="statVerified">0</div><div class="k">Verified</div></div>
+        <div class="stat-tile"><div class="v" id="statCompanies">0</div><div class="k">Companies</div></div>
+        <div class="stat-tile"><div class="v" id="statRemaining">0</div><div class="k">Remaining</div></div>
+      </div>
+      <div id="attentionBanner" class="banner warn hidden"></div>
+      <div id="doneBanner" class="banner done hidden"></div>
+      <div class="prog-actions">
+        <button id="btnPause" class="btn ghost small">⏸ Pause</button>
+        <button id="btnResume" class="btn ghost small hidden">▶ Resume</button>
+        <button id="btnStop" class="btn ghost small danger">■ Stop</button>
+        <button id="btnRetryFailed" class="btn ghost small hidden">↻ Retry failed</button>
+        <button id="btnRefreshAll" class="btn ghost small hidden">⟳ Refresh all — latest data</button>
+      </div>
+      <div id="queueList" class="queue-list"></div>
+    </section>
+
+    <!-- ============ RESULTS CARD ============ -->
+    <section class="card hidden" id="cardResults">
+      <div class="card-head">
+        <h2>Results</h2>
+        <span id="resSummary" class="count-badge">0 people</span>
+      </div>
+      <div class="filter-row" id="filterRow">
+        <button class="chip active" data-f="all">All</button>
+        <button class="chip" data-f="C-Suite">C-Suite</button>
+        <button class="chip" data-f="AI &amp; Automation">AI &amp; Automation</button>
+        <button class="chip" data-f="Product">Product</button>
+        <button class="chip" data-f="Engineering">Engineering</button>
+        <button class="chip" data-f="Digital &amp; IT">Digital &amp; IT</button>
+        <button class="chip" data-f="unverified">⚠ Unverified</button>
+        <button class="chip" data-f="review">Needs review</button>
+      </div>
+      <input id="resSearch" class="text-input" type="search" placeholder="Search name, designation, company…">
+      <div class="table-wrap">
+        <table class="res-table">
+          <thead>
+            <tr><th>Name</th><th>Designation</th><th>Company</th><th>Link / source</th><th>Flags</th></tr>
+          </thead>
+          <tbody id="resBody"></tbody>
+        </table>
+      </div>
+      <div class="export-row main">
+        <button id="btnDlCsv" class="btn primary big">⬇&nbsp; Download CSV — 10 prospect columns, opens in Excel</button>
+      </div>
+      <div class="export-row">
+        <button id="btnCopyCsv" class="btn ghost small">📋 Copy CSV</button>
+        <button id="btnOpenFull" class="btn ghost small">⤢ Full view</button>
+        <button id="btnClearResults" class="btn ghost small danger">Clear</button>
+      </div>
+      <p class="hint">PROSPECT_FIRST_NAME → LINKEDIN_URL, nothing else. Filters and search apply to the export; only accepted prospects are written.</p>
+    </section>
+  </main>
+
+  <!-- ============ SETTINGS MODAL ============ -->
+  <div id="settingsModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>Settings</h2>
+        <button id="btnCloseSettings" class="icon-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="opt">
+          <span>Default AI provider</span>
+          <select id="setProvider">
+            <option value="none">None (Bing only)</option>
+            <option value="groq">Groq — free key at console.groq.com</option>
+            <option value="gemini">Gemini — free key at aistudio.google.com</option>
+            <option value="openrouter">OpenRouter — free key at openrouter.ai</option>
+            <option value="custom">Custom OpenAI-compatible</option>
+          </select>
+        </label>
+        <details class="key-vault" id="keyVault" open>
+          <summary><span>🔑 API keys</span><span class="kv-hint">saved permanently on this device</span></summary>
+          <p class="kv-help">Keys are stored in this browser profile and reused on every run. Set a rotation date to get an expiry warning — providers do not publish key expiry dates.</p>
+          <label class="kv-show"><input type="checkbox" id="showKeys"> Show keys</label>
+
+          <div class="key-row" data-provider="groq">
+            <div class="key-top"><span class="key-name">Groq <em>free</em></span><span class="key-status none" id="keyStatusGroq">not saved</span></div>
+            <div class="key-line">
+              <input type="password" id="setKeyGroq" class="text-input key-input" autocomplete="off" spellcheck="false" placeholder="gsk_...">
+              <button class="btn ghost small" data-key-save="groq">Save</button>
+              <button class="icon-btn tiny" data-key-clear="groq" title="Remove saved key" aria-label="Remove Groq key">✕</button>
+            </div>
+            <label class="key-exp"><span>Expiry / rotation date</span><input type="date" id="setExpGroq"></label>
+          </div>
+
+          <div class="key-row" data-provider="gemini">
+            <div class="key-top"><span class="key-name">Gemini <em>free</em></span><span class="key-status none" id="keyStatusGemini">not saved</span></div>
+            <div class="key-line">
+              <input type="password" id="setKeyGemini" class="text-input key-input" autocomplete="off" spellcheck="false" placeholder="AIza...">
+              <button class="btn ghost small" data-key-save="gemini">Save</button>
+              <button class="icon-btn tiny" data-key-clear="gemini" title="Remove saved key" aria-label="Remove Gemini key">✕</button>
+            </div>
+            <label class="key-exp"><span>Expiry / rotation date</span><input type="date" id="setExpGemini"></label>
+          </div>
+
+          <div class="key-row" data-provider="openrouter">
+            <div class="key-top"><span class="key-name">OpenRouter <em>free models</em></span><span class="key-status none" id="keyStatusOpenrouter">not saved</span></div>
+            <div class="key-line">
+              <input type="password" id="setKeyOpenrouter" class="text-input key-input" autocomplete="off" spellcheck="false" placeholder="sk-or-...">
+              <button class="btn ghost small" data-key-save="openrouter">Save</button>
+              <button class="icon-btn tiny" data-key-clear="openrouter" title="Remove saved key" aria-label="Remove OpenRouter key">✕</button>
+            </div>
+            <label class="key-exp"><span>Expiry / rotation date</span><input type="date" id="setExpOpenrouter"></label>
+          </div>
+
+          <div class="key-row" data-provider="custom">
+            <div class="key-top"><span class="key-name">Custom endpoint</span><span class="key-status none" id="keyStatusCustom">not saved</span></div>
+            <div class="key-line">
+              <input type="password" id="setKeyCustom" class="text-input key-input" autocomplete="off" spellcheck="false" placeholder="API key for your endpoint">
+              <button class="btn ghost small" data-key-save="custom">Save</button>
+              <button class="icon-btn tiny" data-key-clear="custom" title="Remove saved key" aria-label="Remove custom key">✕</button>
+            </div>
+            <label class="key-exp"><span>Expiry / rotation date</span><input type="date" id="setExpCustom"></label>
+          </div>
+
+          <div class="key-row" data-provider="hunter">
+            <div class="key-top"><span class="key-name">Hunter.io <em>optional · real emails</em></span><span class="key-status none" id="keyStatusHunter">not saved</span></div>
+            <div class="key-line">
+              <input type="password" id="setKeyHunter" class="text-input key-input" autocomplete="off" spellcheck="false" placeholder="Hunter API key">
+              <button class="btn ghost small" data-key-save="hunter">Save</button>
+              <button class="icon-btn tiny" data-key-clear="hunter" title="Remove saved key" aria-label="Remove Hunter key">✕</button>
+            </div>
+            <label class="key-exp"><span>Expiry / rotation date</span><input type="date" id="setExpHunter"></label>
+          </div>
+        </details>
+        <div id="customFields" class="hidden">
+          <label class="opt"><span>Custom base URL (e.g. https://api.example.com/v1)</span><input type="text" id="setCustomBase" class="text-input" placeholder="https://api.example.com/v1"></label>
+          <label class="opt"><span>Custom model id</span><input type="text" id="setCustomModel" class="text-input" placeholder="gpt-4o-mini"></label>
+        </div>
+        <button id="btnTestKey" class="btn ghost small">🔑 Test key</button>
+        <span id="testResult" class="test-result"></span>
+
+        <div class="card-head mt"><h2>AI models (auto-updated defaults — override if a provider rotates ids)</h2></div>
+        <label class="opt"><span>Groq model</span><input type="text" id="setModelGroq" class="text-input" placeholder="llama-3.3-70b-versatile"></label>
+        <label class="opt"><span>Gemini model</span><input type="text" id="setModelGemini" class="text-input" placeholder="gemini-2.0-flash"></label>
+        <label class="opt"><span>OpenRouter model</span><input type="text" id="setModelOpenrouter" class="text-input" placeholder="meta-llama/llama-3.3-70b-instruct:free"></label>
+
+        <label class="opt mt">
+          <span>Bing delay (ms between searches)</span>
+          <input type="range" id="setDelay" min="800" max="6000" step="100">
+          <span id="delayVal" class="delay-val"></span>
+        </label>
+        <label class="opt">
+          <span>Bing region host</span>
+          <select id="setHost">
+            <option value="www.bing.com">www.bing.com (global)</option>
+            <option value="cn.bing.com">cn.bing.com</option>
+          </select>
+        </label>
+        <label class="opt">
+          <span>Theme</span>
+          <select id="setTheme">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </label>
+        <p class="privacy">🔒 Keys are stored permanently in this browser profile and never uploaded by LeadScout. Works in Google Chrome and Microsoft Edge (Bing). Research runs on public search results and public pages you can already view. Emails are pattern estimates — verify before outreach.</p>
+      </div>
+      <div class="modal-foot">
+        <button id="btnSaveSettings" class="btn primary">Save settings</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "LeadScout — Bulk Decision-Maker Finder",
+  "short_name": "LeadScout",
+  "version": "2.1.0",
+  "description": "Bulk research 50–100 companies: evidence-backed decision-makers, current roles, honest emails, one clean 10-column CSV. Free AI keys optional.",
+  "homepage_url": "https://github.com/siddhant-pardeshi/LeadScout",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "alarms",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://*.bing.com/*",
+    "https://*.linkedin.com/*",
+    "https://*/*",
+    "https://api.groq.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://openrouter.ai/*",
+    "https://api.hunter.io/*"
+  ],
+  "optional_host_permissions": [
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "LeadScout — bulk decision-maker research",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

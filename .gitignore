@@ -1,0 +1,17 @@
+# OS noise
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+
+# QA renders (regenerable via headless Chrome)
+tools/qa/*.png
+
+# Local build scratch
+tools/video/
+.mimosa/
+*.log
+*.tmp
