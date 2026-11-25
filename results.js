@@ -162,6 +162,40 @@ function resolveTitle(comp) {
 // v1.4 lag fix: rebuild the table only when data actually changed
 let lastKey = '';
 
+
+/**
+ * A JSON snapshot of exactly what this page can see: version, queue state and,
+ * per company, how many people it holds versus how many rows it would export.
+ * One click replaces a round of "it shows nothing" guessing.
+ */
+function downloadDiagnostics() {
+  const payload = {
+    version: chrome.runtime.getManifest().version,
+    at: new Date().toISOString(),
+    page: 'results',
+    job: job ? {
+      running: !!job.running, paused: !!job.paused, attention: job.attention || null,
+      queue: (job.queue || []).length, doneCount: job.doneCount || 0,
+      results: (job.results || []).length
+    } : null,
+    companies: ((job && job.results) || []).map(c => {
+      let sample = '';
+      let error = '';
+      try { sample = (buildCSV([c]).split('\r\n')[1] || '').slice(0, 220); }
+      catch (e) { error = String(e && e.message || e); }
+      return {
+        name: c.name, status: c.status, outcome: c.outcome || '',
+        people: (c.people || []).length,
+        exportable: error ? -1 : exportRowCount([c]),
+        firstLinkedIn: ((c.people || [])[0] || {}).url || '',
+        sample, error
+      };
+    })
+  };
+  download('leadscout-diagnostics-' + stamp() + '.json', JSON.stringify(payload, null, 2), 'application/json');
+  toast('Diagnostics downloaded');
+}
+
 function render(force) {
   if (!job) return;
   let doneN = 0, peopleN = 0;
@@ -329,7 +363,13 @@ async function doCopy() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
+  const exportable = exportRowCount(comps);
+  if (!exportable) {
+    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
+    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
+      ' people, 0 exportable rows (past-role or under review)');
+    return;
+  }
   try {
     await navigator.clipboard.writeText(buildCSV(comps));
     flashButton('btnCopyCsv');
@@ -343,7 +383,13 @@ function doDownload() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
+  const exportable = exportRowCount(comps);
+  if (!exportable) {
+    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
+    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
+      ' people, 0 exportable rows (past-role or under review)');
+    return;
+  }
   download('leadscout-' + stamp() + '.csv',
     '\uFEFF' + buildCSV(comps),
     'text/csv;charset=utf-8');
@@ -355,7 +401,13 @@ function doDownloadFull() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
+  const exportable = exportRowCount(comps);
+  if (!exportable) {
+    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
+    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
+      ' people, 0 exportable rows (past-role or under review)');
+    return;
+  }
   download('leadscout-full-' + stamp() + '.csv',
     '\uFEFF' + buildCSV(comps, { full: true }),
     'text/csv;charset=utf-8');
@@ -367,7 +419,13 @@ async function doCopyTsv() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
+  const exportable = exportRowCount(comps);
+  if (!exportable) {
+    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
+    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
+      ' people, 0 exportable rows (past-role or under review)');
+    return;
+  }
   try {
     await navigator.clipboard.writeText(buildTSV(comps));
     flashButton('btnCopyTsv');
@@ -401,6 +459,7 @@ function wire() {
     render(true);
   });
   on('btnCopyCsv', doCopy);
+on('btnDiag', downloadDiagnostics);
   on('btnCopyTsv', doCopyTsv);
   on('btnDlCsv', doDownload);
   on('btnDlFull', doDownloadFull);

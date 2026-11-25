@@ -616,7 +616,13 @@ async function doCopy() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
+  const exportable = exportRowCount(comps);
+  if (!exportable) {
+    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
+    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
+      ' people, 0 exportable rows (past-role or under review)');
+    return;
+  }
   const csv = buildCSV(comps);
   try {
     await navigator.clipboard.writeText(csv);
@@ -631,7 +637,13 @@ function doDownload() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
+  const exportable = exportRowCount(comps);
+  if (!exportable) {
+    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
+    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
+      ' people, 0 exportable rows (past-role or under review)');
+    return;
+  }
   // BOM first so Excel reads the UTF-8 names correctly
   download('leadscout-' + stamp() + '.csv',
     '\uFEFF' + buildCSV(comps),
@@ -645,7 +657,13 @@ function doDownloadFull() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
+  const exportable = exportRowCount(comps);
+  if (!exportable) {
+    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
+    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
+      ' people, 0 exportable rows (past-role or under review)');
+    return;
+  }
   download('leadscout-full-' + stamp() + '.csv',
     '\uFEFF' + buildCSV(comps, { full: true }),
     'text/csv;charset=utf-8');
@@ -658,7 +676,13 @@ async function doCopyTsv() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
+  const exportable = exportRowCount(comps);
+  if (!exportable) {
+    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
+    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
+      ' people, 0 exportable rows (past-role or under review)');
+    return;
+  }
   try {
     await navigator.clipboard.writeText(buildTSV(comps));
     flashButton('btnCopyTsv');
