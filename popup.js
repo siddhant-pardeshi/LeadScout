@@ -1,11 +1,13 @@
 // LeadScout — popup controller (part 1: helpers, state, progress)
 
-import { DEFAULT_SETTINGS, parseInputs, buildCSV, buildTSV, fmtEta,
+import { DEFAULT_SETTINGS, parseInputs, buildCSV, buildTSV, exportRowCount, fmtEta,
   splitProspectName, linkedinUrlForExport, websiteNameForExport, FULL_EXPORT_HEADERS } from './lib/parse.js';
 import { KEY_PROVIDERS, KEY_LABELS, normalizeKeyMeta, keyStatus, fmtDate, localDateStr, isDateStr } from './lib/keys.js';
 import { extensionContextOk, extensionsUrl } from './lib/platform.js';
 import { extractLinkedInCompany } from './lib/extract.js';
 
+import { installGuard, on, onInput, onChange } from './lib/ui-guard.js';
+installGuard('popup');
 const $ = (id) => document.getElementById(id);
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const keyInputId = (p) => 'setKey' + cap(p);
@@ -614,6 +616,7 @@ async function doCopy() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
+  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
   const csv = buildCSV(comps);
   try {
     await navigator.clipboard.writeText(csv);
@@ -628,6 +631,7 @@ function doDownload() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
+  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
   // BOM first so Excel reads the UTF-8 names correctly
   download('leadscout-' + stamp() + '.csv',
     '\uFEFF' + buildCSV(comps),
@@ -641,6 +645,7 @@ function doDownloadFull() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
+  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
   download('leadscout-full-' + stamp() + '.csv',
     '\uFEFF' + buildCSV(comps, { full: true }),
     'text/csv;charset=utf-8');
@@ -653,6 +658,7 @@ async function doCopyTsv() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
+  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
   try {
     await navigator.clipboard.writeText(buildTSV(comps));
     flashButton('btnCopyTsv');
@@ -929,28 +935,28 @@ async function testKey() {
 // ----------------------------------------------------------------- wire ----
 
 function wire() {
-  $('companyInput').addEventListener('input', updateInputCount);
-  $('btnStart').addEventListener('click', doStart);
+  onInput('companyInput', updateInputCount);
+  on('btnStart', doStart);
   document.addEventListener('keydown', (ev) => {
     if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
       ev.preventDefault();
       doStart();
     }
   });
-  $('btnAddCurrent').addEventListener('click', doAddCurrent);
-  $('btnSample').addEventListener('click', doSample);
-  $('btnClearInput').addEventListener('click', () => {
+  on('btnAddCurrent', doAddCurrent);
+  on('btnSample', doSample);
+  on('btnClearInput', () => {
     $('companyInput').value = '';
     updateInputCount();
   });
 
-  $('btnPause').addEventListener('click', doPause);
-  $('btnResume').addEventListener('click', doResume);
-  $('btnStop').addEventListener('click', doStop);
-  $('btnRetryFailed').addEventListener('click', doRetryFailed);
-  $('btnRefreshAll').addEventListener('click', doRefreshAll);
+  on('btnPause', doPause);
+  on('btnResume', doResume);
+  on('btnStop', doStop);
+  on('btnRetryFailed', doRetryFailed);
+  on('btnRefreshAll', doRefreshAll);
 
-  $('filterRow').addEventListener('click', (ev) => {
+  on('filterRow', (ev) => {
     const chip = ev.target.closest('.chip');
     if (!chip) return;
     const chips = $('filterRow').children;
@@ -959,32 +965,32 @@ function wire() {
     ui.filter = chip.dataset.f;
     renderResults(true);
   });
-  $('resSearch').addEventListener('input', () => {
+  onInput('resSearch', () => {
     ui.search = $('resSearch').value.trim();
     renderResults(true);
   });
 
-  $('btnCopyCsv').addEventListener('click', doCopy);
-  $('btnCopyTsv').addEventListener('click', doCopyTsv);
-  $('btnDlCsv').addEventListener('click', doDownload);
-  $('btnDlFull').addEventListener('click', doDownloadFull);
-  $('btnOpenFull').addEventListener('click', () => chrome.tabs.create({ url: 'results.html' }));
-  $('btnClearResults').addEventListener('click', doClearResults);
+  on('btnCopyCsv', doCopy);
+  on('btnCopyTsv', doCopyTsv);
+  on('btnDlCsv', doDownload);
+  on('btnDlFull', doDownloadFull);
+  on('btnOpenFull', () => chrome.tabs.create({ url: 'results.html' }));
+  on('btnClearResults', doClearResults);
 
-  $('btnSettings').addEventListener('click', openSettings);
-  $('btnCloseSettings').addEventListener('click', () => $('settingsModal').classList.add('hidden'));
-  $('btnSaveSettings').addEventListener('click', saveSettings);
-  $('btnTestKey').addEventListener('click', testKey);
-  $('setProvider').addEventListener('change', () => {
+  on('btnSettings', openSettings);
+  on('btnCloseSettings', () => $('settingsModal').classList.add('hidden'));
+  on('btnSaveSettings', saveSettings);
+  on('btnTestKey', testKey);
+  onChange('setProvider', () => {
     $('customFields').classList.toggle('hidden', $('setProvider').value !== 'custom');
   });
-  $('setDelay').addEventListener('input', () => {
+  onInput('setDelay', () => {
     $('delayVal').textContent = $('setDelay').value + ' ms';
   });
-  $('setTheme').addEventListener('change', () => {
+  onChange('setTheme', () => {
     document.documentElement.dataset.theme = $('setTheme').value;
   });
-  $('btnWorkspace').addEventListener('click', async () => {
+  on('btnWorkspace', async () => {
   try {
     if (!chrome.sidePanel || !chrome.sidePanel.open) {
       toast('This browser build has no side panel — use Edge or Chrome 114+.');
@@ -998,9 +1004,9 @@ function wire() {
   }
 });
 
-$('btnTheme').addEventListener('click', toggleTheme);
+on('btnTheme', toggleTheme);
 
-  $('settingsModal').addEventListener('click', (ev) => {
+  on('settingsModal', (ev) => {
     const saveBtn = ev.target.closest('[data-key-save]');
     if (saveBtn) { persistKey(saveBtn.dataset.keySave); return; }
     const clearBtn = ev.target.closest('[data-key-clear]');
@@ -1009,7 +1015,7 @@ $('btnTheme').addEventListener('click', toggleTheme);
       $('settingsModal').classList.add('hidden');
     }
   });
-  $('showKeys').addEventListener('change', applyKeyVisibility);
+  onChange('showKeys', applyKeyVisibility);
 }
 
 async function toggleTheme() {

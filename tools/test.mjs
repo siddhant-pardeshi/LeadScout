@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {
   parseInputs, slugFromUrl, titleCaseSlug, decodeBingUrl, parseProfileTitle,
   linkedinHandle, companyMatch, companyMatchPartial, domainFromWebsite, emailFor,
-  buildCSV, buildTSV, splitProspectName, CRM_EXPORT_HEADERS, FULL_EXPORT_HEADERS, extractSizeFromText, overlapTokens, kebabName, slugScore,
+  buildCSV, buildTSV, exportRowCount, splitProspectName, CRM_EXPORT_HEADERS, FULL_EXPORT_HEADERS, extractSizeFromText, overlapTokens, kebabName, slugScore,
   looseResolveMatch, roleCurrency, matchHunterEmail, cell, exportCell, nameEvidence,
   officialLeadershipCandidate, inferWebsiteFromSerp, officialPageCandidate, classifyOutcome,
   domainMatchesCompany, websiteCandidates, companyFactsFromPage, resolveTargets,
@@ -787,6 +787,16 @@ T('CSV format: RFC 4180 round-trip, no column shift', () => {
   assert.equal(rows[1][9], 'https://www.linkedin.com/in/aasif-malbari/', 'canonical profile, tracking removed');
   assert.equal(rows[2][0], 'José');
   assert.equal(rows[2][3], '', 'blank email stays blank');
+});
+
+T('exportRowCount: past-role rows are not counted, so an empty export is refused', () => {
+  const comps = [{ name: 'Acme', people: [
+    { name: 'Asha Shah', designation: 'CTO', currentEmployer: 'current' },
+    { name: 'Bob Ray', designation: 'Former CEO', currentEmployer: 'review-past' }
+  ] }];
+  assert.equal(exportRowCount(comps), 1);
+  assert.equal(exportRowCount([{ name: 'X', people: [{ name: 'A B', designation: 'CEO', currentEmployer: 'review-past' }] }]), 0);
+  assert.equal(exportRowCount([]), 0);
 });
 
 T('Full CSV carries every field in its own column', () => {

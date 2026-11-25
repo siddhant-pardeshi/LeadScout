@@ -126,6 +126,7 @@ Settings → **API keys** saves each key into this browser only, with an optiona
 
 | Version | What changed |
 |---|---|
+| **2.4.1** | A blank screen can no longer happen silently: uncaught errors and rejected promises raise a readable banner, every button binds defensively (a missing element is skipped, not fatal), and an export with zero exportable rows is refused with a reason instead of saving a header-only file. |
 | **2.4.0** | Export pass: a **Full CSV (19 columns)** carries email status, LinkedIn source, HQ, company LinkedIn URL, role currency, priority, verification, evidence URL and source; **Copy TSV** pastes into columns when Excel ignores the comma delimiter; the company-link field stopped being validated as a person URL (it was always blank); RFC-4180 round-trip, quoting and no-column-shift are now regression-tested. |
 | **2.3.1** | Bug sweep: a page-wide email no longer attaches to every JSON-LD person; `in.linkedin.com` and `www.linkedin.com` are one identity (no duplicate rows, canonical CSV); the resolver circuit breaker clears on Resume; a consent/captcha during resolution now raises a visible notice instead of silently blanking; the panel works at 380px with an internal table scroll; empty rows no longer show a Verify link; “Asha at Acme” is rejected as a name. |
 | **2.3.0** | Profile resolution actually returns URLs now. Two bugs fixed: the Bing query `site:linkedin.com/in/ "Name" "Company"` returns **zero** results (a second quoted phrase collapses the set) so the name-only query runs first with the company as a narrower retry; and `chrome.tabs.update` resolves before navigation starts, so the extractor was reading the previous page — navigation now waits for the tab to leave the old document. Research rows also get a bounded resolution pass (6 per company, stops if Bing asks for consent/captcha), and a blank cell now explains itself on hover. |
@@ -137,7 +138,7 @@ Settings → **API keys** saves each key into this browser only, with an optiona
 ## Development
 
 ```bash
-node tools/test.mjs           # 92 checks, including the extension import-graph check
+node tools/test.mjs           # 93 checks, including the extension import-graph check
 node tools/diag_linkcheck.mjs # standalone module-link check
 ```
 

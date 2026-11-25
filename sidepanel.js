@@ -10,6 +10,8 @@ import {
   isBlankRecord
 } from './lib/records.js';
 
+import { installGuard, on, onInput } from './lib/ui-guard.js';
+installGuard('sidepanel');
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'workspace.rows';
 const PENDING_KEY = 'workspacePending';
@@ -402,14 +404,14 @@ async function consumePending(pending) {
   applyIncoming(incoming, { context: pending.context || 'capture' });
 }
 
-$('btnExtract').addEventListener('click', extractCurrentPage);
-$('btnResolve').addEventListener('click', resolveMissing);
-$('btnAdd').addEventListener('click', addRow);
-$('btnCsv').addEventListener('click', exportCSV);
-$('btnTsv').addEventListener('click', copyTSV);
-$('btnClear').addEventListener('click', () => armClear($('btnClear')));
+on('btnExtract', extractCurrentPage);
+on('btnResolve', resolveMissing);
+on('btnAdd', addRow);
+on('btnCsv', exportCSV);
+on('btnTsv', copyTSV);
+on('btnClear', () => armClear($('btnClear')));
 
-$('search').addEventListener('input', (e) => {
+onInput('search', (e) => {
   state.search = e.target.value;
   render();
 });

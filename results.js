@@ -1,8 +1,10 @@
 // LeadScout — full-page results view
 
-import { DEFAULT_SETTINGS, buildCSV, buildTSV, fmtEta, splitProspectName,
+import { DEFAULT_SETTINGS, buildCSV, buildTSV, exportRowCount, fmtEta, splitProspectName,
   linkedinUrlForExport, websiteNameForExport, FULL_EXPORT_HEADERS } from './lib/parse.js';
 
+import { installGuard, on, onInput } from './lib/ui-guard.js';
+installGuard('results');
 const $ = (id) => document.getElementById(id);
 
 let job = null;
@@ -327,6 +329,7 @@ async function doCopy() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
+  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
   try {
     await navigator.clipboard.writeText(buildCSV(comps));
     flashButton('btnCopyCsv');
@@ -340,6 +343,7 @@ function doDownload() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
+  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
   download('leadscout-' + stamp() + '.csv',
     '\uFEFF' + buildCSV(comps),
     'text/csv;charset=utf-8');
@@ -351,6 +355,7 @@ function doDownloadFull() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
+  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
   download('leadscout-full-' + stamp() + '.csv',
     '\uFEFF' + buildCSV(comps, { full: true }),
     'text/csv;charset=utf-8');
@@ -362,6 +367,7 @@ async function doCopyTsv() {
   const comps = filteredExportComps();
   if (!comps.length) { toast('No results yet'); return; }
   if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
+  if (!exportRowCount(comps)) { toast('Nothing exportable — every row here is past-role or still under review'); return; }
   try {
     await navigator.clipboard.writeText(buildTSV(comps));
     flashButton('btnCopyTsv');
@@ -381,7 +387,7 @@ function flashButton(id) {
 }
 
 function wire() {
-  $('filterRow').addEventListener('click', (ev) => {
+  on('filterRow', (ev) => {
     const chip = ev.target.closest('.chip');
     if (!chip) return;
     const chips = $('filterRow').children;
@@ -390,14 +396,14 @@ function wire() {
     ui.filter = chip.dataset.f;
     render(true);
   });
-  $('resSearch').addEventListener('input', () => {
+  onInput('resSearch', () => {
     ui.search = $('resSearch').value.trim();
     render(true);
   });
-  $('btnCopyCsv').addEventListener('click', doCopy);
-  $('btnCopyTsv').addEventListener('click', doCopyTsv);
-  $('btnDlCsv').addEventListener('click', doDownload);
-  $('btnDlFull').addEventListener('click', doDownloadFull);
+  on('btnCopyCsv', doCopy);
+  on('btnCopyTsv', doCopyTsv);
+  on('btnDlCsv', doDownload);
+  on('btnDlFull', doDownloadFull);
 }
 
 async function init() {
