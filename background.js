@@ -710,20 +710,25 @@ async function readOfficialLeadership(website, companyName) {
         });
       }
       if (people.length < 3) {
-        for (const link of (out.links || []).slice(0, 3)) {
+        // Real navigation beats guessing: a site that links /about must be read
+        // before the crawler spends its page budget on made-up paths.
+        const discovered = [];
+        for (const link of (out.links || []).slice(0, 6)) {
           if (!link || !link.url || !isOfficialCandidateUrl(link.url)) continue;
           const n = String(link.url).replace(/#.*$/, '').replace(/\/+$/, '');
-          if (n && !seen.has(n)) queue.push(link.url);
+          if (n && !seen.has(n)) discovered.push(link.url);
         }
+        if (discovered.length) queue.unshift(...discovered.reverse());
       }
     }
-    // Known leadership paths are tried before generic about/company links.
+    // Guessed paths are the fallback, not the opening move: they queue behind
+    // any link the homepage actually published.
     if (!pathsAdded && stats.pages >= 1 && !people.length) {
       pathsAdded = true;
       const extraPaths = OFFICIAL_PATHS
         .map(p => base + p)
         .filter(u => !seen.has(u.replace(/#.*$/, '').replace(/\/+$/, '')));
-      queue.unshift(...extraPaths);
+      queue.push(...extraPaths);
     }
   }
   // If the leadership page did not state company size/headquarters, make a
