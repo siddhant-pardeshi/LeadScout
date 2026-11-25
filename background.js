@@ -584,7 +584,10 @@ const OFFICIAL_PATHS = [
   '/en-us/company/leadership', '/en/company/leadership', '/our-leadership', '/who-we-are',
   '/leadership-team', '/about/leadership', '/about/management', '/executive-team',
   '/about/executive-team', '/people', '/about/people', '/our-team', '/team',
-  '/governance', '/leadership-and-governance'
+  '/governance', '/leadership-and-governance',
+  // About-section variants that public company sites use just as often.
+  '/about-us/who-we-are', '/about/who-we-are', '/about/board', '/board',
+  '/directors', '/board-of-directors/our-board', '/our-people', '/about/our-people'
 ];
 
 function isOfficialCandidateUrl(url) {
