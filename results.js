@@ -1,9 +1,15 @@
-// LeadScout — full-page results view
+// LeadScout — full-page results view.
+//
+// The grid shows exactly the ten columns the CSV writes, in the same order,
+// with each cell reading the way the file does. It shares its row order and
+// its cell values with the exporter, so the page cannot drift from the file.
 
-import { DEFAULT_SETTINGS, buildCSV, buildTSV, exportRowCount, fmtEta, splitProspectName,
-  linkedinUrlForExport, websiteNameForExport, FULL_EXPORT_HEADERS } from './lib/parse.js';
+import { DEFAULT_SETTINGS, buildCSV, exportRowCount, splitProspectName, exportablePeople,
+  linkedinUrlForExport, websiteNameForExport } from './lib/parse.js';
+import { extensionContextOk, extensionsUrl } from './lib/platform.js';
+import { openTroubleshoot, closeTroubleshoot } from './lib/troubleshoot.js';
 
-import { installGuard, on, onInput } from './lib/ui-guard.js';
+import { installGuard, on, onInput, missingBindings } from './lib/ui-guard.js';
 installGuard('results');
 const $ = (id) => document.getElementById(id);
 
@@ -16,6 +22,31 @@ function toast(msg, ms = 1800) {
   t.classList.remove('hidden');
   clearTimeout(t._h);
   t._h = setTimeout(() => t.classList.add('hidden'), ms);
+}
+
+function sendMsg(msg) {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage(msg, (res) => {
+        if (chrome.runtime.lastError) {
+          resolve({ ok: false, error: chrome.runtime.lastError.message });
+        } else {
+          resolve(res || { ok: false, error: 'no response' });
+        }
+      });
+    } catch (e) {
+      resolve({ ok: false, error: String(e.message || e) });
+    }
+  });
+}
+
+// The worker may still be registering right after the extension reloads.
+const SW_COLD_RE = /receiving end does not exist|could not establish connection|message port closed/i;
+async function sendMsgRetry(msg) {
+  const first = await sendMsg(msg);
+  if (first.ok || !SW_COLD_RE.test(String(first.error || ''))) return first;
+  await new Promise(r => setTimeout(r, 700));
+  return sendMsg(msg);
 }
 
 function stamp() {
@@ -37,6 +68,15 @@ function download(filename, content, mime) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+function flashButton(id) {
+  const b = $(id);
+  if (!b) return;
+  b.classList.remove('flash');
+  void b.offsetWidth; // restart the animation
+  b.classList.add('flash');
+  setTimeout(() => b.classList.remove('flash'), 650);
+}
+
 // theme lives in settings; keep the page consistent with the popup
 (async () => {
   const st = await chrome.storage.local.get(['settings']);
@@ -44,14 +84,14 @@ function download(filename, content, mime) {
   document.documentElement.dataset.theme = theme;
 })();
 
+// The grid lists exactly the people the CSV writes, in the same order.
 function flattenRows() {
   const rows = [];
   if (!job || !job.results) return rows;
   for (const comp of job.results) {
-    const people = [...(comp.people || [])].sort((a, b) =>
-      (a.pri || 9) - (b.pri || 9) || (b.score || 0) - (a.score || 0));
+    const people = exportablePeople(comp);
     if (!people.length) {
-      rows.push({ comp: comp, p: null, kind: 'review' });
+      rows.push({ comp: comp, p: null, kind: 'review', pastOnly: (comp.people || []).length > 0 });
       continue;
     }
     for (const p of people) rows.push({ comp: comp, p: p, kind: 'person' });
@@ -84,22 +124,35 @@ function tdText(text, cls) {
   return td;
 }
 
+/** An empty cell, exactly as the CSV writes it. The tooltip says why. */
+function blankCell(reason) {
+  const td = tdText('', 'blank');
+  if (reason) td.title = reason;
+  return td;
+}
+
+/**
+ * COMPANY_NAME holds the company's name and nothing else. The shortcut to its
+ * LinkedIn page stays clickable but carries no text, so the cell reads exactly
+ * like the value written to the CSV.
+ */
 function companyCell(comp) {
   const td = tdText(comp.name || comp.input || '', 'co');
-  if (comp.url) {
-    const link = linkEl(comp.url, '↗');
-    if (link.tagName === 'A') {
-      link.className = 'co-link';
-      link.title = 'Company LinkedIn page';
-    }
-    td.appendChild(document.createTextNode(' '));
+  if (comp.url && /^https?:\/\//i.test(comp.url)) {
+    const link = document.createElement('a');
+    link.className = 'co-link';
+    link.href = comp.url;
+    link.target = '_blank';
+    link.rel = 'noreferrer noopener';
+    link.title = 'Company LinkedIn page';
+    link.setAttribute('aria-label', 'Company LinkedIn page');
     td.appendChild(link);
   }
   return td;
 }
 
+// Only a real web address becomes a link — never javascript: or data:.
 function linkEl(href, txt) {
-  // v1.4 security: only real web links become anchors — never javascript:/data:
   if (!/^https?:\/\//i.test(String(href || ''))) {
     return document.createTextNode(txt);
   }
@@ -111,7 +164,16 @@ function linkEl(href, txt) {
   return a;
 }
 
-function reviewDisplay(comp) {
+/** @param pastOnly the company had people, but all are flagged as possibly-past roles. */
+function reviewDisplay(comp, pastOnly) {
+  if (pastOnly) {
+    return {
+      pill: 'REVIEW',
+      text: 'Everyone found here is flagged as a possibly-past role, so none is exported',
+      title: 'A past role is never written to the CSV as a current one.',
+      cls: 'u'
+    };
+  }
   const code = comp.outcome || (comp.status === 'failed' ? 'search_error' : 'no_public_match');
   const defaults = {
     search_blocked: ['SEARCH BLOCKED', 'Bing needs attention before research can continue'],
@@ -159,42 +221,17 @@ function resolveTitle(comp) {
     (rs.state === 'blocked' ? ' — blocked by a Bing check; Refresh all after solving it' : '');
 }
 
-// v1.4 lag fix: rebuild the table only when data actually changed
-let lastKey = '';
-
-
-/**
- * A JSON snapshot of exactly what this page can see: version, queue state and,
- * per company, how many people it holds versus how many rows it would export.
- * One click replaces a round of "it shows nothing" guessing.
- */
-function downloadDiagnostics() {
-  const payload = {
-    version: chrome.runtime.getManifest().version,
-    at: new Date().toISOString(),
-    page: 'results',
-    job: job ? {
-      running: !!job.running, paused: !!job.paused, attention: job.attention || null,
-      queue: (job.queue || []).length, doneCount: job.doneCount || 0,
-      results: (job.results || []).length
-    } : null,
-    companies: ((job && job.results) || []).map(c => {
-      let sample = '';
-      let error = '';
-      try { sample = (buildCSV([c]).split('\r\n')[1] || '').slice(0, 220); }
-      catch (e) { error = String(e && e.message || e); }
-      return {
-        name: c.name, status: c.status, outcome: c.outcome || '',
-        people: (c.people || []).length,
-        exportable: error ? -1 : exportRowCount([c]),
-        firstLinkedIn: ((c.people || [])[0] || {}).url || '',
-        sample, error
-      };
-    })
-  };
-  download('leadscout-diagnostics-' + stamp() + '.json', JSON.stringify(payload, null, 2), 'application/json');
-  toast('Diagnostics downloaded');
+/** Why a person has no profile address, when the lookup recorded a reason. */
+function blankProfileReason(person) {
+  const state = person.resolveState;
+  if (state === 'consent' || state === 'captcha') return 'Bing asked for a human check — complete it, then Refresh all';
+  if (state === 'no_match') return 'Searched, but no LinkedIn profile naming this person was found';
+  if (state === 'no_name') return 'Name is too incomplete to search for';
+  return 'No LinkedIn profile found for this person — left empty, never guessed';
 }
+
+// Rebuild the table only when the data actually changed (the poll runs often).
+let lastKey = '';
 
 function render(force) {
   if (!job) return;
@@ -227,22 +264,21 @@ function render(force) {
     const tr = document.createElement('tr');
 
     if (r.kind === 'review') {
-      // Company diagnostics render across the same ten columns so the
-      // on-screen grid always matches the CSV contract.
-      const review = reviewDisplay(r.comp);
-      tr.appendChild(tdText('—', 'ds'));
-      tr.appendChild(tdText('—', 'ds'));
+      // A company with no accepted person explains itself in the DESIGNATION
+      // cell; every other cell stays empty so the row still has 10 columns.
+      const review = reviewDisplay(r.comp, r.pastOnly);
+      tr.appendChild(blankCell('No prospect for this company'));
+      tr.appendChild(blankCell('No prospect for this company'));
       const reason = tdText(review.text, 'ds');
       reason.title = review.title;
       tr.appendChild(reason);
-      tr.appendChild(tdText('—', 'ds'));
-      const tdCo = companyCell(r.comp);
-      tr.appendChild(tdCo);
+      tr.appendChild(blankCell('No prospect for this company'));
+      tr.appendChild(companyCell(r.comp));
       tr.appendChild(tdText(r.comp.size || '', 'ds'));
       tr.appendChild(tdText(r.comp.country || '', 'ds'));
       tr.appendChild(tdText(r.comp.industry || '', 'ds'));
       tr.appendChild(tdText(websiteNameForExport(r.comp.website), 'ds'));
-      tr.appendChild(tdText('—', 'ds'));
+      tr.appendChild(blankCell('No prospect for this company'));
       frag.appendChild(tr);
       continue;
     }
@@ -259,15 +295,14 @@ function render(force) {
     tdD.textContent = p.designation || '';
     tr.appendChild(tdD);
 
-    const tdE = document.createElement('td');
-    tdE.className = 'est-mail';
+    // What is on screen is what the CSV holds: a value, or an empty cell.
     if (p.email) {
-      tdE.textContent = p.email;
+      const tdE = tdText(p.email, 'est-mail');
       tdE.title = p.emailStatus || 'Email status unavailable';
+      tr.appendChild(tdE);
     } else {
-      tdE.textContent = '—';
+      tr.appendChild(blankCell('No email found for this person — left empty, never guessed'));
     }
-    tr.appendChild(tdE);
 
     const tdCo = companyCell(c);
     if (c.aiNote) tdCo.title = c.aiNote;
@@ -280,25 +315,18 @@ function render(force) {
     tr.appendChild(tdText(c.industry || '', 'ds'));
     tr.appendChild(tdText(websiteNameForExport(c.website), 'ds'));
 
+    // The cell shows the profile address itself, as the CSV writes it.
     const profileUrl = linkedinUrlForExport(p.url);
     const tdL = document.createElement('td');
+    tdL.className = 'url';
     if (profileUrl) {
-      const a = linkEl(profileUrl, 'profile');
-      if (p.linkedinSource === 'official-page') a.title = 'Link published on the company page (profile not loaded)';
-      if (p.linkedinSource === 'search') a.title = 'Found by a paced profile search';
+      const a = linkEl(profileUrl, profileUrl);
+      if (p.linkedinSource === 'official-page') a.title = 'Link published on the company page';
+      else if (p.linkedinSource === 'search') a.title = 'Found by a profile search';
+      else a.title = 'LinkedIn profile';
       tdL.appendChild(a);
     } else {
-      const dash = document.createElement('span');
-      dash.textContent = '—';
-      // Say why it is blank instead of leaving a silent gap.
-      const reason = p.resolveState === 'consent' ? 'Bing needs consent — complete it, then Resolve again'
-        : p.resolveState === 'captcha' ? 'Bing asked for human verification — complete it, then Resolve again'
-        : p.resolveState === 'no_match' ? 'Searched, but no profile naming this person was found'
-        : p.resolveState === 'no_name' ? 'Name is too incomplete to search'
-        : 'No profile link was found on the company page or in search';
-      dash.title = reason;
-      dash.setAttribute('aria-label', reason);
-      tdL.appendChild(dash);
+      tdL.title = blankProfileReason(p);
     }
     tr.appendChild(tdL);
 
@@ -317,8 +345,8 @@ function startPolling() {
     const st = await chrome.storage.local.get(['job']);
     job = st.job || job;
     render(false);
-    // v1.4: keep live while running OR paused — a resume elsewhere must not
-    // leave this page dead
+    // Keep live while running OR paused — a resume elsewhere must not leave
+    // this page dead.
     if (!job || (!job.running && !job.paused)) stopPolling();
   }, 1500);
 }
@@ -327,14 +355,16 @@ function stopPolling() {
   if (ui.pollTimer) { clearInterval(ui.pollTimer); ui.pollTimer = null; }
 }
 
+// -------------------------------------------------------------- exports ----
+
 function exportTargets() {
   return ((job && job.results) || []).filter(c => c.status === 'done');
 }
 
-function hasAcceptedProspects(comps) {
-  return comps.some(c => (c.people || []).length > 0);
-}
-
+/**
+ * When a filter chip or the search box is active, an export writes only the
+ * rows in view (grouped back by company). Otherwise it writes everything.
+ */
 function filteredExportComps() {
   const comps = exportTargets();
   const filtering = (ui.filter !== 'all') || !!ui.search;
@@ -353,96 +383,157 @@ function filteredExportComps() {
       industry: r.comp.industry, size: r.comp.size, hq: r.comp.hq, country: r.comp.country,
       website: r.comp.website,
       outcome: r.comp.outcome, reviewReason: r.comp.reviewReason, reviewDetail: r.comp.reviewDetail,
+      discovery: r.comp.discovery,
       people: r.kind === 'person' ? [r.p] : [], hasReview: r.kind !== 'person'
     });
   }
   return [...map.values()].filter(c => c.people.length || c.hasReview);
 }
 
-async function doCopy() {
+/**
+ * What an export would write right now, or null when it would write nothing.
+ * In that case the reason is shown instead of a silent failure.
+ */
+function selectionForExport() {
   const comps = filteredExportComps();
-  if (!comps.length) { toast('No results yet'); return; }
-  if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  const exportable = exportRowCount(comps);
-  if (!exportable) {
-    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
-    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
-      ' people, 0 exportable rows (past-role or under review)');
-    return;
+  if (!comps.length) { toast('No results yet — research some companies first'); return null; }
+  if (!exportRowCount(comps)) {
+    toast('Nothing to export yet — Troubleshoot explains why');
+    openTroubleshootPanel();
+    return null;
   }
+  return comps;
+}
+
+async function doCopy() {
+  const comps = selectionForExport();
+  if (!comps) return;
   try {
     await navigator.clipboard.writeText(buildCSV(comps));
     flashButton('btnCopyCsv');
     toast('Copied the 10-column CSV');
   } catch (e) {
-    toast('Clipboard blocked — use the .CSV download instead');
+    toast('Clipboard blocked — use Download CSV instead');
   }
 }
 
 function doDownload() {
-  const comps = filteredExportComps();
-  if (!comps.length) { toast('No results yet'); return; }
-  if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  const exportable = exportRowCount(comps);
-  if (!exportable) {
-    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
-    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
-      ' people, 0 exportable rows (past-role or under review)');
-    return;
-  }
+  const comps = selectionForExport();
+  if (!comps) return;
+  // BOM first so Excel reads the UTF-8 names correctly
   download('leadscout-' + stamp() + '.csv',
     '\uFEFF' + buildCSV(comps),
     'text/csv;charset=utf-8');
   flashButton('btnDlCsv');
-  toast('CSV saved — opens straight in Excel');
+  toast('CSV saved — exactly 10 columns, opens straight in Excel');
 }
 
-function doDownloadFull() {
-  const comps = filteredExportComps();
-  if (!comps.length) { toast('No results yet'); return; }
-  if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  const exportable = exportRowCount(comps);
-  if (!exportable) {
-    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
-    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
-      ' people, 0 exportable rows (past-role or under review)');
-    return;
-  }
-  download('leadscout-full-' + stamp() + '.csv',
-    '\uFEFF' + buildCSV(comps, { full: true }),
-    'text/csv;charset=utf-8');
-  flashButton('btnDlFull');
-  toast('Full CSV saved — ' + FULL_EXPORT_HEADERS.length + ' columns');
+// ---------------------------------------------------------- troubleshoot ----
+
+/** Everything the diagnosis needs, read from this page and the extension. */
+async function gatherFacts() {
+  let version = '';
+  try { version = chrome.runtime.getManifest().version; } catch (e) { /* context gone */ }
+  const ping = await sendMsg({ type: 'ping' }).catch(() => ({ ok: false, error: 'no response' }));
+  const st = await chrome.storage.local.get(['settings', 'job']);
+  const saved = (st && st.settings) || {};
+  const provider = saved.provider || DEFAULT_SETTINGS.provider;
+  const keys = saved.keys || {};
+  const hasKey = provider === 'none' ? false
+    : (provider === 'custom' ? !!(saved.customBase && keys.custom) : !!keys[provider]);
+  let clipboardOk = false;
+  try { clipboardOk = !!(navigator.clipboard && navigator.clipboard.writeText); } catch (e) { clipboardOk = false; }
+  return {
+    version: version,
+    page: 'results',
+    contextOk: extensionContextOk(),
+    worker: ping && ping.ok ? { ok: true, version: ping.version }
+      : { ok: false, error: String((ping && ping.error) || 'no response') },
+    guardError: (document.getElementById('ls-guard-banner') || {}).textContent || '',
+    missingBindings: missingBindings(),
+    job: job,
+    ui: { filter: ui.filter, search: ui.search },
+    comps: filteredExportComps(),
+    allResults: (job && job.results) || [],
+    settings: {
+      resolveProfiles: saved.resolveProfiles !== false,
+      maxResolvePerCompany: saved.maxResolvePerCompany,
+      provider: provider,
+      hasKey: hasKey,
+      hunterKey: !!keys.hunter
+    },
+    clipboardOk: clipboardOk,
+    now: Date.now()
+  };
 }
 
-async function doCopyTsv() {
-  const comps = filteredExportComps();
-  if (!comps.length) { toast('No results yet'); return; }
-  if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  const exportable = exportRowCount(comps);
-  if (!exportable) {
-    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
-    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
-      ' people, 0 exportable rows (past-role or under review)');
-    return;
+function resetFilters() {
+  ui.filter = 'all';
+  ui.search = '';
+  const search = $('resSearch');
+  if (search) search.value = '';
+  const row = $('filterRow');
+  if (row) {
+    for (const chip of row.querySelectorAll('.chip')) {
+      chip.classList.toggle('active', chip.dataset.f === 'all');
+    }
   }
+  render(true);
+}
+
+/**
+ * Reload the extension in one click. If the page has already lost its
+ * extension context, open the extensions page for the manual reload instead.
+ */
+function reloadExtension() {
   try {
-    await navigator.clipboard.writeText(buildTSV(comps));
-    flashButton('btnCopyTsv');
-    toast('Copied TSV — paste into Excel and it splits into columns');
-  } catch (e) {
-    toast('Clipboard blocked — use the CSV download instead');
-  }
+    if (extensionContextOk()) { chrome.runtime.reload(); return; }
+  } catch (e) { /* fall through to the manual route */ }
+  try { chrome.tabs.create({ url: extensionsUrl() }); } catch (e) { /* nothing else to try */ }
+  toast('On the extensions page, click ↻ on LeadScout', 4000);
 }
 
-function flashButton(id) {
-  const b = $(id);
-  if (!b) return;
-  b.classList.remove('flash');
-  void b.offsetWidth; // restart the animation
-  b.classList.add('flash');
-  setTimeout(() => b.classList.remove('flash'), 650);
+/** Queue the given companies again by sending the worker their original input. */
+function requeue(list) {
+  return sendMsgRetry({ type: 'start', items: list.map(q => ({
+    type: q.type, slug: q.slug, name: q.name, input: q.input, status: 'queued', error: ''
+  })) }).then(() => { startPolling(); return true; });
 }
+
+async function resumeResearch() {
+  await sendMsgRetry({ type: 'resume' });
+  startPolling();
+}
+
+async function enableResolve() {
+  const st = await chrome.storage.local.get(['settings']);
+  const saved = { ...(st.settings || {}), resolveProfiles: true };
+  await sendMsgRetry({ type: 'setSettings', settings: saved });
+  toast('Profile lookup is on — Refresh all looks up the missing profiles');
+}
+
+function openPopup() {
+  chrome.tabs.create({ url: chrome.runtime.getURL('popup.html') });
+}
+
+function openTroubleshootPanel() {
+  const queue = (job && job.queue) || [];
+  openTroubleshoot({
+    gather: gatherFacts,
+    fixes: {
+      'reload-page': () => location.reload(),
+      'reload-extension': reloadExtension,
+      'reset-filters': resetFilters,
+      'resume': resumeResearch,
+      'retry-failed': () => requeue(queue.filter(q => q.status === 'failed')),
+      'refresh-all': () => requeue(queue.filter(q => q.status === 'done')),
+      'start-research': () => { closeTroubleshoot(); openPopup(); },
+      'enable-resolve': enableResolve
+    }
+  });
+}
+
+// ----------------------------------------------------------------- wire ----
 
 function wire() {
   on('filterRow', (ev) => {
@@ -458,11 +549,9 @@ function wire() {
     ui.search = $('resSearch').value.trim();
     render(true);
   });
+  on('btnTroubleshoot', openTroubleshootPanel);
   on('btnCopyCsv', doCopy);
-on('btnDiag', downloadDiagnostics);
-  on('btnCopyTsv', doCopyTsv);
   on('btnDlCsv', doDownload);
-  on('btnDlFull', doDownloadFull);
 }
 
 async function init() {

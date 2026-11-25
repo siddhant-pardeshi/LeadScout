@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {
   parseInputs, slugFromUrl, titleCaseSlug, decodeBingUrl, parseProfileTitle,
   linkedinHandle, companyMatch, companyMatchPartial, domainFromWebsite, emailFor,
-  buildCSV, buildTSV, exportRowCount, splitProspectName, CRM_EXPORT_HEADERS, FULL_EXPORT_HEADERS, extractSizeFromText, overlapTokens, kebabName, slugScore,
+  buildCSV, exportRowCount, splitProspectName, CRM_EXPORT_HEADERS, sortPeople, extractSizeFromText, overlapTokens, kebabName, slugScore,
   looseResolveMatch, roleCurrency, matchHunterEmail, cell, exportCell, nameEvidence,
   officialLeadershipCandidate, inferWebsiteFromSerp, officialPageCandidate, classifyOutcome,
   domainMatchesCompany, websiteCandidates, companyFactsFromPage, resolveTargets,
@@ -12,10 +12,11 @@ import {
 } from '../lib/parse.js';
 import {
   RECORD_FIELDS, RESOLVE_STATUS, emptyRecord, normalizeRecord, recordKey, mergeRecords,
-  recordRow, recordsToCSV, recordsToTSV, linkedinSearchQuery, verifySearchUrl,
+  recordRow, recordsToCSV, linkedinSearchQuery, verifySearchUrl,
   needsResolution, parseSelectionText, isBlankRecord,
   linkedinSearchQueries, pickProfileResult, companyToken
 } from '../lib/records.js';
+import { diagnose, reportText, readCsv, headline } from '../lib/diagnose.js';
 import { classifyDesignation, seniorityBonus } from '../lib/rank.js';
 import { extractJson, assertSafeUrl } from '../lib/ai.js';
 import { extractBingResults, extractOfficialLeadership, extractLinkedInCompany } from '../lib/extract.js';
@@ -799,40 +800,36 @@ T('exportRowCount: past-role rows are not counted, so an empty export is refused
   assert.equal(exportRowCount([]), 0);
 });
 
-T('Full CSV carries every field in its own column', () => {
-  const comps = [{
-    name: 'Acme Corp', website: 'https://www.acme.com', size: '201-500', country: 'India',
-    industry: 'Software', hq: 'Pune, India', url: 'https://www.linkedin.com/company/acme/',
-    people: [{
-      name: 'Asha Shah', designation: 'CTO', email: 'asha@acme.io', emailStatus: 'estimated — unverified',
-      url: 'https://www.linkedin.com/in/asha-shah/', urlVerified: false, currentEmployer: 'official',
-      priority: 'P1', verification: 'Official company source',
-      evidenceUrl: 'https://acme.com/team', sourceType: 'official'
-    }]
-  }];
-  const header = buildCSV(comps, { full: true }).split('\r\n')[0];
-  assert.equal(header, FULL_EXPORT_HEADERS.join(','));
-  assert.equal(FULL_EXPORT_HEADERS.length, 19);
-  const row = buildCSV(comps, { full: true }).split('\r\n')[1];
-  assert.ok(row.startsWith('Asha,Shah,CTO,asha@acme.io,Acme Corp,201-500,India,Software,acme.com,https://www.linkedin.com/in/asha-shah/,'));
-  assert.ok(row.includes('"Pune, India"'), 'HQ with a comma stays one quoted cell');
-  assert.ok(row.includes('https://www.linkedin.com/company/acme/'));
-  assert.ok(row.includes('Current (official company source)'));
-  assert.ok(row.endsWith(',Official company source'), 'source is the last column');
+T('the export has one format only: no full-field or TSV writer exists any more', () => {
+  const parse = fs.readFileSync(new URL('../lib/parse.js', import.meta.url), 'utf8');
+  const records = fs.readFileSync(new URL('../lib/records.js', import.meta.url), 'utf8');
+  for (const page of ['popup.html', 'popup.js', 'results.html', 'results.js', 'sidepanel.html', 'sidepanel.js']) {
+    const src = fs.readFileSync(new URL('../' + page, import.meta.url), 'utf8');
+    assert.equal(/buildTSV|recordsToTSV|FULL_EXPORT_HEADERS|full:\s*true/i.test(src), false,
+      page + ' still offers a second export format');
+    assert.equal(/data-f="[^"]*">[^<]*\bTSV\b/i.test(src), false, page + ' still mentions TSV');
+  }
+  assert.equal(/export function buildTSV/.test(parse), false);
+  assert.equal(/export const FULL_EXPORT_HEADERS/.test(parse), false);
+  assert.equal(/export function recordsToTSV/.test(records), false);
+  // Even a caller that asks for the old option gets the 10-column contract.
+  assert.equal(buildCSV([{ name: 'Acme', people: [{ name: 'A B' }] }], { full: true })
+    .split('\r\n')[0], CRM_EXPORT_HEADERS.join(','));
 });
 
-T('TSV is the same table with tabs, for pasting into Excel', () => {
-  const comps = [{
-    name: 'Acme, Inc', people: [{
-      name: 'Asha Shah', designation: 'Head\tof Sales', currentEmployer: 'current'
-    }]
-  }];
-  const lines = buildTSV(comps).replace(/\r\n$/, '').split('\r\n');
-  assert.equal(lines[0], CRM_EXPORT_HEADERS.join('\t'));
-  const cells = lines[1].split('\t');
-  assert.equal(cells.length, 10);
-  assert.equal(cells[2], 'Head of Sales', 'an embedded tab cannot add a column');
-  assert.equal(cells[4], 'Acme, Inc', 'commas are safe in TSV');
+T('sortPeople ranks by priority, then score — and never by NaN', () => {
+  const people = [
+    { name: 'Low Score Exec', pri: 1, score: 60, priority: 'P1' },
+    { name: 'High Score Head', pri: 2, score: 120, priority: 'P2' },
+    { name: 'Other Head', pri: 2, score: 120, priority: 'P2' },
+    { name: 'No Rank', priority: 'P3' },
+    { name: 'Manager', pri: 5, score: 200, priority: 'P5' }
+  ];
+  // P1 first; equal priority goes to the higher score; an equal pair is ordered by name.
+  assert.deepEqual(sortPeople({ people }).map(p => p.name),
+    ['Low Score Exec', 'High Score Head', 'Other Head', 'No Rank', 'Manager']);
+  // the label alone ("P2") is still honoured when the number is missing
+  assert.equal(sortPeople({ people: [{ name: 'A', priority: 'P2' }, { name: 'B', priority: 'P1' }] })[0].name, 'B');
 });
 
 T('buildCSV: no manufactured row for a review-only company', () => {
@@ -909,9 +906,11 @@ T('buildCSV: strips tracking params and rejects a bare /in/', () => {
       { name: 'Jane Doe', designation: 'CTO', url: 'https://www.linkedin.com/in/jane-doe/?trk=profile' },
       { name: 'Bare Link', designation: 'CIO', url: 'https://www.linkedin.com/in/' }
     ]
-  }]).replace(/\r\n$/, '').split('\r\n');
-  assert.equal(rows[1].split(',')[9], 'https://www.linkedin.com/in/jane-doe/');
-  assert.equal(rows[2].split(',')[9], '');
+  }]).replace(/\r\n$/, '').split('\r\n').slice(1);
+  // Rows are looked up by name so the check does not depend on their order.
+  const linkedinOf = (first) => rows.find(r => r.startsWith(first + ',')).split(',')[9];
+  assert.equal(linkedinOf('Jane'), 'https://www.linkedin.com/in/jane-doe/');
+  assert.equal(linkedinOf('Bare'), '');
 });
 
 T('buildCSV: one row model, so tabs and newlines cannot shift columns', () => {
@@ -1224,13 +1223,12 @@ T('records: CSV is exactly ten values with quoting, Unicode and formula safety',
   assert.ok(lines[1].includes("'=sum(1,1)"), 'formula-looking values stay text (email is lowercased)');
 });
 
-T('records: TSV collapses tabs and newlines so the grid cannot shift', () => {
-  const tsv = recordsToTSV([{ firstName: 'A', lastName: 'B', designation: 'Head\tof\nSales', company: 'Acme' }]);
-  const lines = tsv.split('\n');
-  assert.equal(lines[0], CRM_EXPORT_HEADERS.join('\t'));
-  const cells = lines[1].split('\t');
-  assert.equal(cells.length, 10);
-  assert.equal(cells[2], 'Head of Sales');
+T('records: the workspace export is the same 10-column CSV', () => {
+  const csv = recordsToCSV([{ firstName: 'A', lastName: 'B', designation: 'Head\tof\nSales, EMEA', company: 'Acme' }]);
+  const lines = csv.replace(/\r\n$/, '').split('\r\n');
+  assert.equal(lines[0], CRM_EXPORT_HEADERS.join(','));
+  assert.equal(lines[1], 'A,B,"Head of Sales, EMEA",,Acme,,,,,');
+  assert.equal(readCsv(lines[1])[0].length, 10, 'the quoted comma stays inside its cell');
 });
 
 T('LinkedIn URLs are canonical: one profile has one identity', () => {
@@ -1308,6 +1306,244 @@ T('workspace: manifest declares the side panel, capture menu and permissions', (
   }
   assert.ok(!m.permissions.includes('tabs') === false);
   assert.equal(m.optional_host_permissions.length, 1);
+});
+
+// ---- troubleshoot: diagnose() ----------------------------------------------
+// Every branch of the diagnosis, so the panel cannot point at the wrong cause.
+const person = (name, extra = {}) => ({
+  name, designation: 'CTO', url: '', currentEmployer: 'current', pri: 1, score: 10, ...extra
+});
+const company = (name, people, extra = {}) => ({ id: name, name, status: 'done', people, ...extra });
+const facts = (over = {}) => ({
+  version: '9.9.9', contextOk: true, worker: { ok: true, version: '9.9.9' }, guardError: '',
+  missingBindings: [], job: { running: false, paused: false, queue: [], results: [], finishedAt: 0 },
+  ui: { filter: 'all', search: '' }, comps: [], allResults: [],
+  settings: { resolveProfiles: true, provider: 'none', hasKey: false, hunterKey: false },
+  clipboardOk: true, now: 100, ...over
+});
+const findingOf = (result, id) => result.findings.find(f => f.id === id) || null;
+const acme = () => company('Acme Corp', [person('Jane Doe', { url: 'https://www.linkedin.com/in/jane-doe/' })]);
+const withResults = (results, over = {}) => facts({
+  job: { running: false, paused: false, queue: results.map(() => ({ status: 'done' })), results, finishedAt: 90 },
+  comps: results, allResults: results, ...over
+});
+
+T('diagnose: a healthy run reports no problem and passes the export check', () => {
+  const r = diagnose(withResults([acme()]));
+  assert.equal(r.level, 'ok');
+  assert.match(headline(r), /Everything checks out/);
+  const exportFinding = findingOf(r, 'export');
+  assert.equal(exportFinding.level, 'ok');
+  assert.match(exportFinding.detail, /1 row × exactly 10 columns/);
+  assert.equal(findingOf(r, 'worker').level, 'ok');
+  assert.equal(r.findings[0].level, 'ok');
+});
+
+T('diagnose: findings are ordered most severe first', () => {
+  const r = diagnose(withResults([acme()], { worker: { ok: false, error: 'no response' }, clipboardOk: false }));
+  const levels = r.findings.map(f => f.level);
+  const rank = { fail: 0, warn: 1, ok: 2, info: 3 };
+  for (let i = 1; i < levels.length; i++) assert.ok(rank[levels[i - 1]] <= rank[levels[i]], levels.join(','));
+});
+
+T('diagnose: a dead background worker is the first problem, with the reload fix', () => {
+  const r = diagnose(withResults([acme()], { worker: { ok: false, error: 'no response' } }));
+  assert.equal(r.level, 'fail');
+  assert.equal(findingOf(r, 'worker').fix, 'reload-extension');
+  assert.match(findingOf(r, 'worker').detail, /no response/);
+  assert.match(headline(r), /problem stops LeadScout from working/);
+});
+
+T('diagnose: a missing worker answer is treated as a dead worker', () => {
+  assert.equal(diagnose(withResults([acme()], { worker: null })).level, 'fail');
+});
+
+T('diagnose: two builds running at once (page and worker versions differ)', () => {
+  const f = findingOf(diagnose(withResults([acme()], { worker: { ok: true, version: '1.0.0' } })), 'worker');
+  assert.equal(f.level, 'fail');
+  assert.match(f.title, /Two builds/);
+  assert.equal(f.fix, 'reload-extension');
+});
+
+T('diagnose: a window that outlived the extension asks for a page reload, not an extension reload', () => {
+  const r = diagnose(withResults([acme()], { contextOk: false }));
+  assert.equal(findingOf(r, 'context').fix, 'reload-page');
+  assert.equal(findingOf(r, 'worker'), null);
+});
+
+T('diagnose: a caught script error and buttons without handlers are reported', () => {
+  const r = diagnose(withResults([acme()], { guardError: 'popup error: x is not defined', missingBindings: ['btnDlCsv', 'btnStart'] }));
+  assert.equal(findingOf(r, 'page-error').level, 'fail');
+  const wiring = findingOf(r, 'wiring');
+  assert.equal(wiring.level, 'fail');
+  assert.match(wiring.detail, /#btnDlCsv, #btnStart/);
+  assert.equal(wiring.fix, 'reload-extension');
+});
+
+T('diagnose: no results yet points at starting a research run', () => {
+  const f = findingOf(diagnose(facts()), 'results');
+  assert.equal(f.level, 'info');
+  assert.equal(f.fix, 'start-research');
+});
+
+T('diagnose: a running job is informational; a paused one is a warning with Resume', () => {
+  const running = withResults([acme()]);
+  running.job.running = true;
+  assert.equal(findingOf(diagnose(running), 'state').fix, null);
+  assert.equal(diagnose(running).level, 'ok');
+  const paused = withResults([acme()]);
+  paused.job.paused = true;
+  paused.job.attention = 'Bing needs a human check.';
+  const f = findingOf(diagnose(paused), 'state');
+  assert.equal(f.level, 'warn');
+  assert.equal(f.fix, 'resume');
+  assert.match(f.detail, /Bing needs a human check/);
+});
+
+T('diagnose: failed companies are listed with a retry fix', () => {
+  const f = withResults([acme()]);
+  f.job.queue = [{ status: 'done' }, { status: 'failed', name: 'Godrej Industries' }];
+  const failed = findingOf(diagnose(f), 'failed');
+  assert.equal(failed.level, 'warn');
+  assert.equal(failed.fix, 'retry-failed');
+  assert.match(failed.detail, /Godrej Industries/);
+});
+
+T('diagnose: an active filter explains a smaller CSV and offers to clear it', () => {
+  const other = company('Lupin limited', [person('Nilesh Gupta')]);
+  const f = withResults([acme(), other], { ui: { filter: 'Product', search: '' } });
+  // only the filtered rows are "in view"
+  f.comps = [other];
+  const filter = findingOf(diagnose(f), 'filter');
+  assert.equal(filter.level, 'warn');
+  assert.equal(filter.fix, 'reset-filters');
+  assert.match(filter.detail, /"Product"/);
+  assert.match(filter.detail, /contain 1 of 2 people/);
+  assert.equal(diagnose(f).level, 'warn');
+});
+
+T('diagnose: people left out as possibly-past roles are named as a count', () => {
+  const c = company('Acme Corp', [person('Jane Doe'), person('Old Hand', { currentEmployer: 'review-past' })]);
+  const many = company('Zeta', [person('A B'), person('X Y', { currentEmployer: 'review-past' }), person('Q R', { currentEmployer: 'review-past' })]);
+  let f = findingOf(diagnose(withResults([c])), 'past-roles');
+  assert.equal(f.level, 'info');
+  assert.equal(f.fix, null);
+  assert.match(f.title, /1 person is left out as a possibly-past role/);
+  assert.match(f.detail, /not shown in the grid and not written to the CSV/);
+  assert.match(findingOf(diagnose(withResults([many])), 'past-roles').title, /2 people are left out/);
+  // nobody left out, no note
+  assert.equal(findingOf(diagnose(withResults([acme()])), 'past-roles'), null);
+});
+
+T('diagnose: everyone in view flagged as a past role is a failure, never a silent empty file', () => {
+  const c = company('Acme Corp', [person('Old Hand', { currentEmployer: 'review-past' })]);
+  const f = withResults([c]);
+  const e = findingOf(diagnose(f), 'export');
+  assert.equal(e.level, 'fail');
+  assert.match(e.title, /possibly-past role/);
+  assert.equal(e.fix, null);
+  assert.equal(diagnose(f).level, 'fail');
+});
+
+T('diagnose: nothing found explains why per company', () => {
+  const c = company('Empty Co', [], { reviewReason: 'Company website blocked automated access' });
+  const e = findingOf(diagnose(withResults([c])), 'export');
+  assert.equal(e.level, 'warn');
+  assert.match(e.detail, /1 × Company website blocked automated access/);
+  assert.equal(e.fix, 'refresh-all');
+});
+
+T('diagnose: the export is read back and a broken contract is caught', () => {
+  const r = diagnose(withResults([acme()], { csv: 'A,B,C\r\nx,y,z\r\n', exportable: 1 }));
+  const e = findingOf(r, 'export');
+  assert.equal(e.level, 'fail');
+  assert.match(e.title, /does not match the 10-column contract/);
+  assert.match(e.detail, /Header matches: no/);
+  assert.equal(findingOf(r, 'export').fix, 'reload-extension');
+});
+
+T('diagnose: a page may supply its own export text (the workspace rows)', () => {
+  const csv = CRM_EXPORT_HEADERS.join(',') + '\r\nAsha,Shah,CTO,,,Acme,,,,\r\n';
+  const r = diagnose(withResults([acme()], { csv, exportable: 1 }));
+  assert.equal(findingOf(r, 'export').level, 'ok');
+  assert.match(findingOf(r, 'export').detail, /1 row × exactly 10 columns/);
+});
+
+T('diagnose: a sparse LinkedIn column names the real cause', () => {
+  const blocked = company('Acme Corp', [person('A B')], { discovery: { resolve: { attempts: 6, resolved: 1, state: 'blocked' } } });
+  let f = findingOf(diagnose(withResults([blocked])), 'col-linkedin');
+  assert.equal(f.level, 'warn');
+  assert.equal(f.fix, 'refresh-all');
+  assert.match(f.detail, /stopped after 6 attempts \(1 profile\)/);
+  const running = withResults([blocked]);
+  running.job.paused = true;
+  assert.equal(findingOf(diagnose(running), 'col-linkedin').fix, 'resume');
+
+  const searched = company('Acme Corp', [person('A B')], { discovery: { resolve: { attempts: 4, resolved: 0, state: 'ok' } } });
+  f = findingOf(diagnose(withResults([searched])), 'col-linkedin');
+  assert.equal(f.level, 'info');
+  assert.equal(f.fix, null);
+  assert.match(f.detail, /looked up 4 people and found an indexed profile for 0/);
+  // the per-company limit is stated, since it is one real reason a cell is empty
+  assert.match(f.detail, /at most 6 people per company/);
+
+  f = findingOf(diagnose(withResults([company('Acme Corp', [person('A B')])])), 'col-linkedin');
+  assert.match(f.title, /No profile lookup has run yet/);
+  assert.equal(f.fix, 'refresh-all');
+});
+
+T('diagnose: a sparse email column says whether Hunter.io is connected', () => {
+  const s = { ...facts().settings };
+  const noHunter = findingOf(diagnose(withResults([acme()], { settings: { ...s, hunterKey: false } })), 'col-email');
+  assert.match(noHunter.detail, /No Hunter\.io key is saved/);
+  const hunter = findingOf(diagnose(withResults([acme()], { settings: { ...s, hunterKey: true } })), 'col-email');
+  assert.match(hunter.detail, /Hunter\.io is connected/);
+});
+
+T('diagnose: old results, a switched-off lookup and a blocked clipboard are flagged', () => {
+  const old = withResults([acme()]);
+  old.job.finishedAt = 100 - 30 * 86400000;
+  const stale = findingOf(diagnose(old), 'stale');
+  assert.equal(stale.fix, 'refresh-all');
+  assert.match(stale.title, /30 days old/);
+
+  const settings = { ...facts().settings, resolveProfiles: false };
+  const off = findingOf(diagnose(withResults([acme()], { settings })), 'setting-resolve');
+  assert.equal(off.level, 'warn');
+  assert.equal(off.fix, 'enable-resolve');
+
+  const clip = findingOf(diagnose(withResults([acme()], { clipboardOk: false })), 'clipboard');
+  assert.equal(clip.level, 'warn');
+  assert.match(clip.detail, /Download CSV instead/);
+});
+
+T('diagnose: settings note reflects the AI provider and its key', () => {
+  const s = facts().settings;
+  assert.match(findingOf(diagnose(withResults([acme()], { settings: s })), 'setting-ai').title, /AI enrichment: off/);
+  assert.match(findingOf(diagnose(withResults([acme()], { settings: { ...s, provider: 'groq', hasKey: false } })), 'setting-ai').title, /groq \(no key saved/);
+  assert.match(findingOf(diagnose(withResults([acme()], { settings: { ...s, provider: 'groq', hasKey: true } })), 'setting-ai').detail, /cannot add a person the sources do not name/);
+});
+
+T('diagnose: headline counts problems and checks', () => {
+  assert.match(headline(diagnose(withResults([acme()], { worker: { ok: false } }))), /One problem stops LeadScout/);
+  assert.match(headline(diagnose(withResults([acme()], { worker: { ok: false }, clipboardOk: false, guardError: 'x' }))), /2 problems need fixing · 1 more to check/);
+  assert.match(headline(diagnose(withResults([acme()], { clipboardOk: false }))), /one thing to check/);
+});
+
+T('diagnose: the report is plain text a person can paste', () => {
+  const f = withResults([acme()], { worker: { ok: false, error: 'no response' }, version: '9.9.9' });
+  const text = reportText(diagnose(f), f);
+  assert.match(text, /LeadScout troubleshooting report/);
+  assert.match(text, /Version 9\.9\.9/);
+  assert.match(text, /One problem stops LeadScout/);
+  assert.match(text, /\[PROBLEM\] The background worker is not answering/);
+  assert.match(text, /Fix: Reload the extension/);
+  assert.match(text, /PROSPECT_FIRST_NAME, PROSPECT_LAST_NAME/);
+});
+
+T('readCsv: quoted commas, escaped quotes and the byte-order mark', () => {
+  const table = readCsv('\uFEFFa,b,c\r\n"x, y","he said ""hi""",\r\nplain,2,3\n');
+  assert.deepEqual(table, [['a', 'b', 'c'], ['x, y', 'he said "hi"', ''], ['plain', '2', '3']]);
 });
 
 // ---- v1.4.1 ESM link check (reproduces Chrome "status code: 15") ----

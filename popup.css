@@ -706,8 +706,18 @@ textarea:focus, select:focus, .text-input:focus {
 .res-table tbody tr { transition: background 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease; }
 .res-table td a { color: #67E8F9; }
 [data-theme="light"] .res-table td a { color: #2563EB; }
-.co-link { font-size: 10px; margin-left: 3px; text-decoration: none; color: #67E8F9; }
+/* The company-page shortcut stays clickable but adds no text to the cell, so
+   COMPANY_NAME reads exactly like the value in the CSV. */
+.co-link {
+  display: inline-block; margin-left: 4px; vertical-align: 1px;
+  font-size: 10px; line-height: 1; text-decoration: none; color: #67E8F9;
+}
+.co-link::before { content: "↗"; }
 [data-theme="light"] .co-link { color: #2563EB; }
+/* A profile address is shown in full; it wraps rather than being cut off. */
+.res-table td.url { word-break: break-all; }
+/* An empty cell is empty in the CSV too; the tooltip (cursor: help) says why. */
+.res-table td.blank { cursor: help; }
 .pill { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14); }
 
 .modal-overlay { background: rgba(3, 5, 15, 0.78); backdrop-filter: blur(12px); animation: overlayIn 0.25s ease both; }
@@ -735,26 +745,31 @@ textarea:focus, select:focus, .text-input:focus {
     transition-duration: 0.001ms !important;
   }
 }
-/* Responsive tables: the popup grid mirrors the 10-column CSV contract.
-   Ten columns cannot fit 470px, so the wrapper scrolls horizontally. */
+/* Responsive tables: the grid mirrors the 10-column CSV contract.
+   Column names are the contract's own (never shortened); they wrap after
+   their first underscore so each one shows in full. */
+.res-table thead th { white-space: normal; overflow-wrap: anywhere; line-height: 1.3; vertical-align: bottom; }
+
+/* Popup: ten columns cannot fit 470px, so the wrapper scrolls sideways. */
 .content .table-wrap { overflow-x: auto; }
 .content .res-table { table-layout: fixed; min-width: 900px; }
-.content .res-table th { font-size: 8.6px; padding: 5px 6px; }
+.content .res-table th { font-size: 8.8px; padding: 6px 5px; }
 .content .res-table td { font-size: 10.6px; padding: 4px 6px; overflow-wrap: anywhere; }
-.content .res-table th:nth-child(1), .content .res-table td:nth-child(1) { width: 8%; }
+.content .res-table th:nth-child(1), .content .res-table td:nth-child(1) { width: 9.5%; }
 .content .res-table th:nth-child(2), .content .res-table td:nth-child(2) { width: 9%; }
-.content .res-table th:nth-child(3), .content .res-table td:nth-child(3) { width: 15%; }
+.content .res-table th:nth-child(3), .content .res-table td:nth-child(3) { width: 13.5%; }
 .content .res-table th:nth-child(4), .content .res-table td:nth-child(4) { width: 14%; }
-.content .res-table th:nth-child(5), .content .res-table td:nth-child(5) { width: 10%; }
+.content .res-table th:nth-child(5), .content .res-table td:nth-child(5) { width: 9.5%; }
 .content .res-table th:nth-child(6), .content .res-table td:nth-child(6) { width: 9%; }
-.content .res-table th:nth-child(7), .content .res-table td:nth-child(7) { width: 7%; }
+.content .res-table th:nth-child(7), .content .res-table td:nth-child(7) { width: 7.5%; }
 .content .res-table th:nth-child(8), .content .res-table td:nth-child(8) { width: 10%; }
 .content .res-table th:nth-child(9), .content .res-table td:nth-child(9) { width: 9%; }
 .content .res-table th:nth-child(10), .content .res-table td:nth-child(10) { width: 9%; }
 
 .results-main .table-wrap { overflow: auto; }
 .results-main .res-table { table-layout: fixed; min-width: 1180px; }
-.results-main .res-table th:nth-child(1), .results-main .res-table td:nth-child(1) { width: 8%; }
+.results-main .res-table th { font-size: 10px; letter-spacing: 0.3px; }
+.results-main .res-table th:nth-child(1), .results-main .res-table td:nth-child(1) { width: 9%; }
 .results-main .res-table th:nth-child(2), .results-main .res-table td:nth-child(2) { width: 9%; }
 .results-main .res-table th:nth-child(3), .results-main .res-table td:nth-child(3) { width: 15%; }
 .results-main .res-table th:nth-child(4), .results-main .res-table td:nth-child(4) { width: 13%; }
@@ -763,7 +778,7 @@ textarea:focus, select:focus, .text-input:focus {
 .results-main .res-table th:nth-child(7), .results-main .res-table td:nth-child(7) { width: 7%; }
 .results-main .res-table th:nth-child(8), .results-main .res-table td:nth-child(8) { width: 10%; }
 .results-main .res-table th:nth-child(9), .results-main .res-table td:nth-child(9) { width: 9%; }
-.results-main .res-table th:nth-child(10), .results-main .res-table td:nth-child(10) { width: 10%; }
+.results-main .res-table th:nth-child(10), .results-main .res-table td:nth-child(10) { width: 9%; }
 .results-main .res-table td { overflow-wrap: anywhere; }
 
 @media (max-width: 760px) {

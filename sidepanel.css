@@ -189,8 +189,7 @@ th:nth-child(6), td:nth-child(6) { width: 92px; }
 th:nth-child(7), td:nth-child(7) { width: 88px; }
 th:nth-child(8), td:nth-child(8) { width: 98px; }
 th:nth-child(9), td:nth-child(9) { width: 132px; }
-th:nth-child(10), td:nth-child(10) { width: 180px; }
-th:nth-child(11), td:nth-child(11) { width: 34px; }
+th:nth-child(10), td:nth-child(10) { width: 196px; }
 
 tbody td {
   padding: 0;
@@ -239,11 +238,15 @@ tbody tr:hover td { background: rgba(99, 102, 241, .10); }
 .badge.auto { color: #A5B4FC; background: rgba(99, 102, 241, .16); border-color: rgba(129, 140, 248, .38); }
 .badge.review { color: #FCD34D; background: rgba(251, 191, 36, .13); border-color: rgba(251, 191, 36, .35); }
 
+/* Row delete lives inside the last cell — the table has exactly ten columns.
+   It appears when the row is pointed at or focused, in the same 26px slot
+   style as the "open profile" link beside it. */
 .rowdel {
-  width: 30px; height: 30px; margin: 3px auto; display: grid; place-items: center;
-  border-radius: 7px; border: 1px solid transparent; background: transparent;
-  color: var(--faint); cursor: pointer;
+  flex: 0 0 auto; width: 26px; height: 26px; display: none; place-items: center;
+  border-radius: 7px; border: 1px solid var(--line); background: rgba(23, 27, 48, .8);
+  color: var(--faint); cursor: pointer; font-size: 12px;
 }
+tbody tr:hover .rowdel, tbody tr:focus-within .rowdel { display: grid; }
 .rowdel:hover { color: #FCA5A5; border-color: rgba(248, 113, 113, .4); background: rgba(127, 29, 29, .25); }
 
 /* --------------------------------------------------------------- misc --- */

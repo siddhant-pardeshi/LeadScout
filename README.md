@@ -41,7 +41,7 @@ PROSPECT_FIRST_NAME,PROSPECT_LAST_NAME,DESIGNATION,EMAIL_ID,COMPANY_NAME,COMPANY
 - `EMAIL_ID` is filled when it can be sourced — verified through Hunter.io, or a pattern estimate marked `estimated — unverified`. Otherwise it stays blank.
 - `WEBSITE_NAME` is the company's real domain, only when a source-backed site was found.
 - `LINKEDIN_URL` only ever contains a real person profile (`/in/`, `/pub/`) that showed up in search. Never guessed. Never a company page. Tracking params stripped.
-- "Former CEO at Acme" never comes back as a current role — past-role rows are dropped before export.
+- "Former CEO at Acme" never comes back as a current role. People flagged as possibly-past are left out of the table and of the file.
 - Blank means blank. No filler rows.
 
 <div align="center">
@@ -67,7 +67,7 @@ The table itself:
 - A **link icon** on `WEBSITE_NAME` and `LINKEDIN_URL`; both open in a new tab.
 - Dedupe by profile URL first, then email + name. Re-extracting the same page fills blanks instead of adding duplicates.
 - Rows persist in `chrome.storage.local`, so a browser restart does not lose your table.
-- **⤓ CSV** downloads RFC-4180 CSV with a UTF-8 BOM; **⧉ Copy TSV** pastes straight into Sheets or Excel. Both use the same ten headers.
+- **⤓ CSV** downloads the ten-column CSV with a UTF-8 BOM, the same file the popup gives you.
 
 ### How a missing LinkedIn URL is resolved
 
@@ -77,15 +77,32 @@ The table itself:
 
 Lookups are serialized and spaced ~1.9 s apart. If Bing raises a captcha or consent screen the resolver stops and tells you, instead of hammering the page. No profile URL is ever constructed from a name.
 
-## Two exports, one table
+## One export, one table
 
-| Button | Columns | Use it for |
-|---|---|---|
-| **⬇ Download CSV** | 10 | Your CRM importer. Exact contract, RFC-4180 quoting, UTF-8 BOM so Excel reads accents correctly. |
-| **⬇ Full CSV — every field** | 19 | Audit and hand-off: the ten columns plus `EMAIL_STATUS`, `LINKEDIN_SOURCE`, `HQ`, `COMPANY_LINKEDIN_URL`, `ROLE_CURRENCY`, `PRIORITY`, `VERIFICATION`, `EVIDENCE_URL`, `SOURCE_TYPE`. |
-| **⌗ Copy TSV for Excel** | 10 | Pasting. If Excel drops a CSV into one column (a regional delimiter setting), this always lands in cells. |
+| Button | What you get |
+|---|---|
+| **⬇ Download CSV** | A file with exactly the ten columns, in this order. It opens straight in Excel; names like José García read correctly. |
+| **📋 Copy CSV** | The same text on the clipboard, ready to paste into Excel or a CRM importer. |
 
-Every value is quoted the moment it contains a comma, a quote or a line break, so `Managing Director & CEO, Godrej Consumer Products` stays in **DESIGNATION** and never shifts the row. Both files come from the same row model — the CSV and TSV cannot drift apart.
+There is no other format and no optional extra columns. The table on screen is the file: each cell shows the value the CSV holds, and an empty cell on screen is an empty cell in the file.
+
+A value that contains a comma, a quote or a line break is quoted, so `Managing Director & CEO, Godrej Consumer Products` stays in **DESIGNATION** and never shifts the row.
+
+## Troubleshoot
+
+If a column looks empty, a button does nothing, or a download does not arrive: press **🩺 Troubleshoot**. It is in the popup's top bar, under the results, on the full results page and in the workspace.
+
+It checks the extension and the export itself, then tells you what is wrong and why:
+
+- whether the background part of the extension is running, and whether it is the same version as the page
+- whether every button on the page is connected
+- whether the export would contain rows right now — it builds the CSV and reads it back to confirm ten columns
+- how full each column is, and the real reason a column is sparse (for example: the LinkedIn lookup covers at most 6 people per company per run, or no Hunter.io key is saved, or Bing stopped the lookup with a human check)
+- whether a filter is narrowing what gets exported, and who was left out as a possibly-past role
+
+Where a fix is a single action, the finding has a button for it — reload the extension, show all rows again, resume research, retry failed companies, refresh the data, switch the profile lookup on. **Copy report** puts the whole diagnosis on the clipboard, so you can paste it into an issue or a message.
+
+When an export would produce no rows, LeadScout does not save an empty file. It opens Troubleshoot on the reason instead.
 
 ## Install
 
@@ -114,7 +131,7 @@ Settings → **API keys** saves each key into this browser only, with an optiona
 - A profile URL is kept only if it came from a real search result for that company — or from the company's own leadership page, with the source linked in the UI.
 - The AI can only propose people whose names already appear in that company's own results; roles are re-read from the evidence, not taken from the model.
 - If a company's own website lists its leadership, those rows are marked **Official** in the UI with the page linked.
-- Possibly-past roles are flagged `PAST?` in the results table and never exported.
+- Someone flagged as possibly no longer in that role is left out of the table and of the CSV. Troubleshoot says how many were left out.
 
 ## Notes
 
@@ -126,6 +143,7 @@ Settings → **API keys** saves each key into this browser only, with an optiona
 
 | Version | What changed |
 |---|---|
+| **2.5.0** | The export is the ten-column CSV and nothing else: the 19-column "Full CSV" and every "Copy TSV" button are gone from the popup, the results page and the workspace. The workspace table is ten columns wide again (a row is deleted from inside its last cell). Column names are never shortened or clipped, the LinkedIn cell shows the address itself, and the table lists exactly the people the CSV writes. Row order now really follows priority (the comparison silently fell back to score before). New **🩺 Troubleshoot** panel explains an empty column, a dead button or a missing download and offers the fix. A real-browser test (`tools/e2e.ps1`) presses the actual buttons and reads the file. |
 | **2.4.2** | An export that would contain zero rows is refused with the counts that explain it ("1 companies, 1 people, 0 exportable rows — past-role or under review") instead of silently saving a header-only file. The results page gains **ⓘ Diagnostics**: one JSON with version, queue state and, per company, people vs exportable rows. |
 | **2.4.1** | A blank screen can no longer happen silently: uncaught errors and rejected promises raise a readable banner, every button binds defensively (a missing element is skipped, not fatal), and an export with zero exportable rows is refused with a reason instead of saving a header-only file. |
 | **2.4.0** | Export pass: a **Full CSV (19 columns)** carries email status, LinkedIn source, HQ, company LinkedIn URL, role currency, priority, verification, evidence URL and source; **Copy TSV** pastes into columns when Excel ignores the comma delimiter; the company-link field stopped being validated as a person URL (it was always blank); RFC-4180 round-trip, quoting and no-column-shift are now regression-tested. |
@@ -139,9 +157,14 @@ Settings → **API keys** saves each key into this browser only, with an optiona
 ## Development
 
 ```bash
-node tools/test.mjs           # 93 checks, including the extension import-graph check
-node tools/diag_linkcheck.mjs # standalone module-link check
+node tools/test.mjs              # 116 checks: parsing, ranking, the CSV contract, the troubleshoot logic
+node tools/diag_linkcheck.mjs    # standalone module-link check
+powershell -ExecutionPolicy Bypass -File tools\e2e.ps1   # real-browser test
 ```
+
+The real-browser test starts a throwaway Microsoft Edge profile with this folder loaded as an extension, feeds it a known research result, presses the real **Download CSV** and **Copy CSV** buttons on every page, and reads back what came out. It checks that the header is exactly the ten columns, that every row has ten fields, that the table on screen reads like the file, and that Troubleshoot finds and fixes what it should. It takes about 20 seconds and leaves your own browser profile untouched.
+
+It needs Microsoft Edge or a Chromium build. Google Chrome no longer loads an unpacked extension from the command line.
 
 ```
 manifest.json        MV3 config
@@ -151,8 +174,9 @@ sidepanel.html/.css/.js  wide workspace: capture, edit, resolve, export
 content.js           on-page extractor (profile / list / team / selection)
 results.html/.js     full-page results view
 lib/                 parse · records · rank · ai · hunter · extract · keys · platform · verify-lead
+                     diagnose (troubleshoot logic) · troubleshoot (its panel) · ui-guard
 assets/              animated SVG previews
-tools/               tests and helpers
+tools/               unit tests, real-browser test, icon generator
 ```
 
 <div align="center">

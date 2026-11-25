@@ -4,14 +4,15 @@
   <meta charset="utf-8">
   <title>LeadScout — Results</title>
   <link rel="stylesheet" href="popup.css">
-  <style>
-    body { width: auto; max-height: none; min-height: 100vh; }
-    .results-main { max-width: 1400px; margin: 0 auto; padding: 18px 24px 40px; }
-    .table-wrap { max-height: none; }
-    .res-table { font-size: 13px; }
-    .res-table td a { white-space: nowrap; }
-    .est-mail { opacity: 0.85; }
-  </style>
+    <style>
+      body { width: auto; max-height: none; min-height: 100vh; }
+      .results-main { max-width: 1400px; margin: 0 auto; padding: 18px 24px 40px; }
+      .table-wrap { max-height: none; }
+      .res-table { font-size: 13px; }
+      /* A profile address is shown in full, so it wraps instead of staying on one line. */
+      .res-table td.url a { white-space: normal; word-break: break-all; }
+      .est-mail { opacity: 0.85; }
+    </style>
 </head>
 <body>
   <header class="topbar">
@@ -37,10 +38,8 @@
     </div>
     <div class="top-actions">
       <button id="btnDlCsv" class="btn primary small">⬇ Download CSV · 10 columns</button>
-      <button id="btnDlFull" class="btn ghost small">⬇ Full CSV · all fields</button>
-      <button id="btnCopyTsv" class="btn ghost small">⌗ Copy TSV</button>
       <button id="btnCopyCsv" class="btn ghost small">📋 Copy CSV</button>
-      <button id="btnDiag" class="btn ghost small" title="Download a JSON snapshot of what this page can see">ⓘ Diagnostics</button>
+      <button id="btnTroubleshoot" class="btn ghost small" title="Check the extension and the CSV export">🩺 Troubleshoot</button>
     </div>
   </header>
 
@@ -64,8 +63,9 @@
         <table class="res-table">
           <thead>
             <tr>
-              <th>PROSPECT_FIRST_NAME</th><th>PROSPECT_LAST_NAME</th><th>DESIGNATION</th><th>EMAIL_ID</th>
-              <th>COMPANY_NAME</th><th>COMPANY_SIZE</th><th>COUNTRY</th><th>INDUSTRY_TYPE</th><th>WEBSITE_NAME</th><th>LINKEDIN_URL</th>
+              <th>PROSPECT_<wbr>FIRST_NAME</th><th>PROSPECT_<wbr>LAST_NAME</th><th>DESIGNATION</th><th>EMAIL_ID</th>
+              <th>COMPANY_<wbr>NAME</th><th>COMPANY_<wbr>SIZE</th><th>COUNTRY</th><th>INDUSTRY_<wbr>TYPE</th>
+              <th>WEBSITE_<wbr>NAME</th><th>LINKEDIN_<wbr>URL</th>
             </tr>
           </thead>
           <tbody id="resBody"></tbody>

@@ -6,11 +6,14 @@
 
 import {
   RECORD_FIELDS, RESOLVE_STATUS, emptyRecord, normalizeRecord, mergeRecords,
-  recordsToCSV, recordsToTSV, needsResolution, verifySearchUrl, parseSelectionText,
+  recordsToCSV, needsResolution, verifySearchUrl, parseSelectionText,
   isBlankRecord
 } from './lib/records.js';
+import { readCsv } from './lib/diagnose.js';
+import { extensionContextOk, extensionsUrl } from './lib/platform.js';
+import { openTroubleshoot } from './lib/troubleshoot.js';
 
-import { installGuard, on, onInput } from './lib/ui-guard.js';
+import { installGuard, on, onInput, missingBindings } from './lib/ui-guard.js';
 installGuard('sidepanel');
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'workspace.rows';
@@ -41,6 +44,15 @@ function send(msg) {
       resolve({ ok: false, error: String(e.message || e) });
     }
   });
+}
+
+// The worker may still be registering right after the extension reloads.
+const SW_COLD_RE = /receiving end does not exist|could not establish connection|message port closed/i;
+async function sendRetry(msg) {
+  const first = await send(msg);
+  if (first.ok || !SW_COLD_RE.test(String(first.error || ''))) return first;
+  await new Promise(r => setTimeout(r, 700));
+  return send(msg);
 }
 
 let saveTimer = null;
@@ -234,18 +246,19 @@ function render() {
     liTd.appendChild(liWrap);
     tr.appendChild(liTd);
 
-    const actionTd = document.createElement('td');
+    // The table has exactly ten columns, so the row's delete button sits in
+    // the last cell. It is shown when the row is pointed at or focused.
     const del = document.createElement('button');
     del.className = 'rowdel';
     del.type = 'button';
     del.title = 'Delete this row';
+    del.setAttribute('aria-label', 'Delete this row');
     del.textContent = '✕';
     del.addEventListener('click', () => {
       state.rows = state.rows.filter(r => r.id !== row.id);
       persist(); refreshStats(); render();
     });
-    actionTd.appendChild(del);
-    tr.appendChild(actionTd);
+    liWrap.appendChild(del);
 
     frag.appendChild(tr);
   }
@@ -332,18 +345,72 @@ function exportCSV() {
   if (!rows.length) { toast('Nothing to export', true); return; }
   const csv = '\uFEFF' + recordsToCSV(rows);
   download('leadscout-workspace-' + stamp() + '.csv', csv, 'text/csv;charset=utf-8');
-  toast('CSV exported — ' + rows.length + ' rows, 10 columns');
+  toast('CSV exported — ' + rows.length + ' rows, exactly 10 columns');
 }
 
-async function copyTSV() {
-  const rows = visibleRows();
-  if (!rows.length) { toast('Nothing to copy', true); return; }
-  try {
-    await navigator.clipboard.writeText(recordsToTSV(rows));
-    toast('TSV copied — paste into Sheets or Excel');
-  } catch (e) {
-    toast('Clipboard blocked — use the CSV download', true);
-  }
+// ------------------------------------------------------------ troubleshoot --
+
+/**
+ * The workspace holds flat rows, so its facts are expressed in the shape the
+ * diagnosis expects: every visible row as one person, plus the real export
+ * text so the CSV check reads what this page would actually write.
+ */
+async function gatherFacts() {
+  let version = '';
+  try { version = chrome.runtime.getManifest().version; } catch (e) { /* context gone */ }
+  const ping = await sendRetry({ type: 'ping' });
+  const st = await chrome.storage.local.get(['settings']);
+  const saved = (st && st.settings) || {};
+  const provider = saved.provider || 'none';
+  const keys = saved.keys || {};
+  const toPerson = (r) => ({
+    name: [r.firstName, r.lastName].filter(Boolean).join(' '),
+    designation: r.designation, email: r.email, url: r.linkedinUrl,
+    currentEmployer: 'current', resolveState: r.status === 'review' ? 'no_match' : ''
+  });
+  const inView = visibleRows();
+  const csv = recordsToCSV(inView);
+  let clipboardOk = false;
+  try { clipboardOk = !!(navigator.clipboard && navigator.clipboard.writeText); } catch (e) { clipboardOk = false; }
+  return {
+    version: version,
+    page: 'workspace',
+    contextOk: extensionContextOk(),
+    worker: ping && ping.ok ? { ok: true, version: ping.version }
+      : { ok: false, error: String((ping && ping.error) || 'no response') },
+    guardError: (document.getElementById('ls-guard-banner') || {}).textContent || '',
+    missingBindings: missingBindings(),
+    job: { results: [{ id: 'workspace', people: state.rows.map(toPerson) }], queue: [] },
+    ui: { filter: 'all', search: state.search },
+    comps: [{ id: 'workspace', people: inView.map(toPerson) }],
+    allResults: [{ id: 'workspace', people: state.rows.map(toPerson) }],
+    csv: csv,
+    exportable: readCsv(csv).length - 1,
+    settings: {
+      resolveProfiles: true,
+      provider: provider,
+      hasKey: provider === 'none' ? false : !!keys[provider],
+      hunterKey: !!keys.hunter
+    },
+    clipboardOk: clipboardOk,
+    now: Date.now()
+  };
+}
+
+function openTroubleshootPanel() {
+  openTroubleshoot({
+    gather: gatherFacts,
+    fixes: {
+      'reload-page': () => location.reload(),
+      'reload-extension': () => {
+        try { chrome.tabs.create({ url: extensionsUrl() }); } catch (e) { /* nothing else to try */ }
+        toast('On the extensions page, click ↻ on LeadScout', true);
+      },
+      // The workspace's counterpart of refreshing: look up missing profiles.
+      'reset-filters': () => { state.search = ''; $('search').value = ''; render(); },
+      'refresh-all': () => resolveMissing()
+    }
+  });
 }
 
 function addRow() {
@@ -408,7 +475,7 @@ on('btnExtract', extractCurrentPage);
 on('btnResolve', resolveMissing);
 on('btnAdd', addRow);
 on('btnCsv', exportCSV);
-on('btnTsv', copyTSV);
+on('btnTroubleshoot', openTroubleshootPanel);
 on('btnClear', () => armClear($('btnClear')));
 
 onInput('search', (e) => {

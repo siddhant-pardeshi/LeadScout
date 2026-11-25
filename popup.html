@@ -31,6 +31,7 @@
       </div>
     </div>
     <div class="top-actions">
+      <button id="btnTroubleshootTop" class="icon-btn" title="Troubleshoot — check the extension and the CSV export" aria-label="Troubleshoot">🩺</button>
       <button id="btnWorkspace" class="icon-btn" title="Open the wide workspace (side panel)" aria-label="Open workspace">▤</button>
       <button id="btnTheme" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">◐</button>
       <button id="btnSettings" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
@@ -135,7 +136,11 @@
       <div class="table-wrap">
         <table class="res-table">
           <thead>
-            <tr><th>FIRST</th><th>LAST</th><th>DESIGNATION</th><th>EMAIL_ID</th><th>COMPANY</th><th>SIZE</th><th>COUNTRY</th><th>INDUSTRY</th><th>WEBSITE</th><th>LINKEDIN</th></tr>
+            <tr>
+              <th>PROSPECT_<wbr>FIRST_NAME</th><th>PROSPECT_<wbr>LAST_NAME</th><th>DESIGNATION</th><th>EMAIL_ID</th>
+              <th>COMPANY_<wbr>NAME</th><th>COMPANY_<wbr>SIZE</th><th>COUNTRY</th><th>INDUSTRY_<wbr>TYPE</th>
+              <th>WEBSITE_<wbr>NAME</th><th>LINKEDIN_<wbr>URL</th>
+            </tr>
           </thead>
           <tbody id="resBody"></tbody>
         </table>
@@ -144,13 +149,12 @@
         <button id="btnDlCsv" class="btn primary big">⬇&nbsp; Download CSV — 10 prospect columns, opens in Excel</button>
       </div>
       <div class="export-row">
-        <button id="btnCopyTsv" class="btn ghost small">⌗ Copy TSV for Excel</button>
         <button id="btnCopyCsv" class="btn ghost small">📋 Copy CSV</button>
-        <button id="btnDlFull" class="btn ghost small">⬇ Full CSV — every field</button>
+        <button id="btnTroubleshoot" class="btn ghost small">🩺 Troubleshoot</button>
         <button id="btnOpenFull" class="btn ghost small">⤢ Full view</button>
         <button id="btnClearResults" class="btn ghost small danger">Clear</button>
       </div>
-      <p class="hint">PROSPECT_FIRST_NAME → LINKEDIN_URL — ten columns, nothing else. Excel putting everything in one cell? Use <b>Copy TSV</b>. The full CSV adds email status, HQ, company LinkedIn URL, role currency, priority, verification, evidence URL and source.</p>
+      <p class="hint">The file has exactly these ten columns, in this order: PROSPECT_FIRST_NAME → LINKEDIN_URL. Filters and search apply to the export; only accepted prospects are written. A missing value stays empty — it is never guessed.</p>
     </section>
   </main>
 

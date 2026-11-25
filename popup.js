@@ -1,12 +1,13 @@
 // LeadScout — popup controller (part 1: helpers, state, progress)
 
-import { DEFAULT_SETTINGS, parseInputs, buildCSV, buildTSV, exportRowCount, fmtEta,
-  splitProspectName, linkedinUrlForExport, websiteNameForExport, FULL_EXPORT_HEADERS } from './lib/parse.js';
+import { DEFAULT_SETTINGS, parseInputs, buildCSV, exportRowCount, fmtEta, exportablePeople,
+  splitProspectName, linkedinUrlForExport, websiteNameForExport } from './lib/parse.js';
 import { KEY_PROVIDERS, KEY_LABELS, normalizeKeyMeta, keyStatus, fmtDate, localDateStr, isDateStr } from './lib/keys.js';
 import { extensionContextOk, extensionsUrl } from './lib/platform.js';
 import { extractLinkedInCompany } from './lib/extract.js';
+import { openTroubleshoot, closeTroubleshoot } from './lib/troubleshoot.js';
 
-import { installGuard, on, onInput, onChange } from './lib/ui-guard.js';
+import { installGuard, on, onInput, onChange, missingBindings } from './lib/ui-guard.js';
 installGuard('popup');
 const $ = (id) => document.getElementById(id);
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -167,10 +168,10 @@ function renderProgress() {
   $('progEta').textContent = (job.running && remaining > 0)
     ? ('ETA ' + fmtEta(etaSec)) : 'ETA —';
 
-  // live stat tiles
+  // live stat tiles — "people" counts exactly those the CSV will contain
   let peopleN = 0, verifiedN = 0;
   for (const c of (job.results || [])) {
-    for (const p of (c.people || [])) {
+    for (const p of exportablePeople(c)) {
       peopleN++;
       if (p.urlVerified) verifiedN++;
     }
@@ -234,14 +235,14 @@ function syncProgressButtons() {
 
 // ----------------------------------------------------- results rendering ----
 
+// The grid lists exactly the people the CSV writes, in the same order.
 function flattenRows() {
   const rows = [];
   if (!job || !job.results) return rows;
   for (const comp of job.results) {
-    const people = [...(comp.people || [])].sort((a, b) =>
-      (a.pri || 9) - (b.pri || 9) || (b.score || 0) - (a.score || 0));
+    const people = exportablePeople(comp);
     if (!people.length) {
-      rows.push({ comp: comp, p: null, kind: 'review' });
+      rows.push({ comp: comp, p: null, kind: 'review', pastOnly: (comp.people || []).length > 0 });
       continue;
     }
     for (const p of people) rows.push({ comp: comp, p: p, kind: 'person' });
@@ -267,17 +268,30 @@ function rowMatches(r, filter, search) {
   return true;
 }
 
+/**
+ * COMPANY_NAME holds the company's name and nothing else. The shortcut to its
+ * LinkedIn page stays clickable but carries no text, so the cell reads exactly
+ * like the value written to the CSV.
+ */
 function companyCell(comp) {
   const td = tdText(comp.name || comp.input || '', 'co');
-  if (comp.url) {
-    const link = linkEl(comp.url, '↗');
-    if (link.tagName === 'A') {
-      link.className = 'co-link';
-      link.title = 'Company LinkedIn page';
-    }
-    td.appendChild(document.createTextNode(' '));
+  if (comp.url && /^https?:\/\//i.test(comp.url)) {
+    const link = document.createElement('a');
+    link.className = 'co-link';
+    link.href = comp.url;
+    link.target = '_blank';
+    link.rel = 'noreferrer noopener';
+    link.title = 'Company LinkedIn page';
+    link.setAttribute('aria-label', 'Company LinkedIn page');
     td.appendChild(link);
   }
+  return td;
+}
+
+/** An empty cell in the CSV. The tooltip says why; the text stays empty. */
+function blankCell(reason) {
+  const td = tdText('', 'blank');
+  td.title = reason;
   return td;
 }
 
@@ -330,7 +344,16 @@ function tdText(text, cls) {
   return td;
 }
 
-function reviewDisplay(comp) {
+/** @param pastOnly the company had people, but all are flagged as possibly-past roles. */
+function reviewDisplay(comp, pastOnly) {
+  if (pastOnly) {
+    return {
+      pill: 'REVIEW',
+      text: 'Everyone found here is flagged as a possibly-past role, so none is exported',
+      title: 'A past role is never written to the CSV as a current one.',
+      cls: 'u'
+    };
+  }
   const code = comp.outcome || (comp.status === 'failed' ? 'search_error' : 'no_public_match');
   const defaults = {
     search_blocked: ['SEARCH BLOCKED', 'Bing needs attention before research can continue'],
@@ -381,19 +404,21 @@ function renderResults(force) {
     const tr = document.createElement('tr');
 
     if (r.kind === 'review') {
-      const review = reviewDisplay(r.comp);
-      tr.appendChild(tdText('—', 'ds'));
-      tr.appendChild(tdText('—', 'ds'));
+      // A company with no exported person explains itself in the DESIGNATION
+      // cell; every other cell stays empty so the row still has 10 columns.
+      const review = reviewDisplay(r.comp, r.pastOnly);
+      tr.appendChild(blankCell('No prospect for this company'));
+      tr.appendChild(blankCell('No prospect for this company'));
       const reason = tdText(review.text, 'ds');
       reason.title = review.title;
       tr.appendChild(reason);
-      tr.appendChild(tdText('—', 'ds'));
+      tr.appendChild(blankCell('No prospect for this company'));
       tr.appendChild(companyCell(r.comp));
       tr.appendChild(tdText(r.comp.size || '', 'ds'));
       tr.appendChild(tdText(r.comp.country || '', 'ds'));
       tr.appendChild(tdText(r.comp.industry || '', 'ds'));
       tr.appendChild(tdText(websiteNameForExport(r.comp.website), 'ds'));
-      tr.appendChild(tdText('—', 'ds'));
+      tr.appendChild(blankCell('No prospect for this company'));
       frag.appendChild(tr);
       continue;
     }
@@ -410,13 +435,15 @@ function renderResults(force) {
     tdD.textContent = p.designation || '';
     tr.appendChild(tdD);
 
+    // What is on screen is what the CSV holds: a value, or an empty cell.
     const tdE = document.createElement('td');
     tdE.className = 'est-mail';
     if (p.email) {
       tdE.textContent = p.email;
       tdE.title = p.emailStatus || 'Email status unavailable';
     } else {
-      tdE.textContent = '—';
+      tdE.className = 'blank';
+      tdE.title = 'No email found for this person — left empty, never guessed';
     }
     tr.appendChild(tdE);
 
@@ -431,10 +458,12 @@ function renderResults(force) {
     tr.appendChild(tdText(c.industry || '', 'ds'));
     tr.appendChild(tdText(websiteNameForExport(c.website), 'ds'));
 
+    // The cell shows the profile address itself, as the CSV writes it.
     const profileUrl = linkedinUrlForExport(p.url);
     const tdL = document.createElement('td');
-    if (profileUrl) tdL.appendChild(linkEl(profileUrl, 'profile'));
-    else tdL.appendChild(document.createTextNode('—'));
+    tdL.className = 'url';
+    if (profileUrl) tdL.appendChild(linkEl(profileUrl, profileUrl));
+    else tdL.title = 'No LinkedIn profile found for this person — left empty, never guessed';
     tr.appendChild(tdL);
 
     frag.appendChild(tr);
@@ -567,12 +596,8 @@ function exportTargets() {
   return ((job && job.results) || []).filter(c => c.status === 'done');
 }
 
-function hasAcceptedProspects(comps) {
-  return comps.some(c => (c.people || []).length > 0);
-}
-
 /**
- * v1.3 one-click exports: when a filter chip or search is active, export ONLY
+ * When a filter chip or the search box is active, an export writes only the
  * the visible rows (grouped back by company). Otherwise export everything.
  */
 function filteredExportComps() {
@@ -612,84 +637,130 @@ function filteredExportComps() {
   return out;
 }
 
-async function doCopy() {
+/**
+ * What an export would write right now, or null when it would write nothing.
+ * In that case the reason is shown instead of a silent failure.
+ */
+function selectionForExport() {
   const comps = filteredExportComps();
-  if (!comps.length) { toast('No results yet'); return; }
-  if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  const exportable = exportRowCount(comps);
-  if (!exportable) {
-    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
-    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
-      ' people, 0 exportable rows (past-role or under review)');
-    return;
+  if (!comps.length) { toast('No results yet — research some companies first'); return null; }
+  if (!exportRowCount(comps)) {
+    toast('Nothing to export yet — Troubleshoot explains why');
+    openTroubleshootPanel();
+    return null;
   }
-  const csv = buildCSV(comps);
+  return comps;
+}
+
+async function doCopy() {
+  const comps = selectionForExport();
+  if (!comps) return;
   try {
-    await navigator.clipboard.writeText(csv);
+    await navigator.clipboard.writeText(buildCSV(comps));
     flashButton('btnCopyCsv');
     toast('Copied the 10-column CSV');
   } catch (e) {
-    toast('Clipboard blocked — use the .CSV download instead');
+    toast('Clipboard blocked — use Download CSV instead');
   }
 }
 
 function doDownload() {
-  const comps = filteredExportComps();
-  if (!comps.length) { toast('No results yet'); return; }
-  if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  const exportable = exportRowCount(comps);
-  if (!exportable) {
-    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
-    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
-      ' people, 0 exportable rows (past-role or under review)');
-    return;
-  }
+  const comps = selectionForExport();
+  if (!comps) return;
   // BOM first so Excel reads the UTF-8 names correctly
   download('leadscout-' + stamp() + '.csv',
     '\uFEFF' + buildCSV(comps),
     'text/csv;charset=utf-8');
   flashButton('btnDlCsv');
-  toast('CSV saved — opens straight in Excel');
+  toast('CSV saved — exactly 10 columns, opens straight in Excel');
 }
 
-/** Every field the pipeline holds, for people who want the evidence too. */
-function doDownloadFull() {
-  const comps = filteredExportComps();
-  if (!comps.length) { toast('No results yet'); return; }
-  if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  const exportable = exportRowCount(comps);
-  if (!exportable) {
-    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
-    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
-      ' people, 0 exportable rows (past-role or under review)');
-    return;
-  }
-  download('leadscout-full-' + stamp() + '.csv',
-    '\uFEFF' + buildCSV(comps, { full: true }),
-    'text/csv;charset=utf-8');
-  flashButton('btnDlFull');
-  toast('Full CSV saved — ' + FULL_EXPORT_HEADERS.length + ' columns');
+// ---------------------------------------------------------- troubleshoot ----
+
+/** Everything the diagnosis needs, read from this page and the extension. */
+async function gatherFacts() {
+  let version = '';
+  try { version = chrome.runtime.getManifest().version; } catch (e) { /* context gone */ }
+  const ping = await sendMsg({ type: 'ping' }).catch(() => ({ ok: false, error: 'no response' }));
+  let clipboardOk = false;
+  try { clipboardOk = !!(navigator.clipboard && navigator.clipboard.writeText); } catch (e) { clipboardOk = false; }
+  const provider = settings.provider || 'none';
+  const keys = settings.keys || {};
+  const hasKey = provider === 'none' ? false
+    : (provider === 'custom' ? !!(settings.customBase && keys.custom) : !!keys[provider]);
+  return {
+    version: version,
+    page: 'popup',
+    contextOk: extensionContextOk(),
+    worker: ping && ping.ok ? { ok: true, version: ping.version }
+      : { ok: false, error: String((ping && ping.error) || 'no response') },
+    guardError: (document.getElementById('ls-guard-banner') || {}).textContent || '',
+    missingBindings: missingBindings(),
+    job: job,
+    ui: { filter: ui.filter, search: ui.search },
+    comps: filteredExportComps(),
+    allResults: (job && job.results) || [],
+    settings: {
+      resolveProfiles: settings.resolveProfiles !== false,
+      maxResolvePerCompany: settings.maxResolvePerCompany,
+      provider: provider,
+      hasKey: hasKey,
+      hunterKey: !!keys.hunter
+    },
+    clipboardOk: clipboardOk,
+    now: Date.now()
+  };
 }
 
-/** Tabs, so a paste into Excel or Sheets lands in columns. */
-async function doCopyTsv() {
-  const comps = filteredExportComps();
-  if (!comps.length) { toast('No results yet'); return; }
-  if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
-  const exportable = exportRowCount(comps);
-  if (!exportable) {
-    const people = comps.reduce((n, c) => n + ((c.people || []).length), 0);
-    toast('Nothing to export: ' + comps.length + ' companies, ' + people +
-      ' people, 0 exportable rows (past-role or under review)');
-    return;
+function resetFilters() {
+  ui.filter = 'all';
+  ui.search = '';
+  const search = $('resSearch');
+  if (search) search.value = '';
+  const row = $('filterRow');
+  if (row) {
+    for (const chip of row.querySelectorAll('.chip')) {
+      chip.classList.toggle('active', chip.dataset.f === 'all');
+    }
   }
+  renderResults(true);
+}
+
+/**
+ * Reload the extension in one click. After a reload the browser closes this
+ * popup by itself; if the page has already lost its extension context, open
+ * the extensions page for the manual reload instead.
+ */
+function reloadExtension() {
   try {
-    await navigator.clipboard.writeText(buildTSV(comps));
-    flashButton('btnCopyTsv');
-    toast('Copied TSV — paste into Excel and it splits into columns');
-  } catch (e) {
-    toast('Clipboard blocked — use the CSV download instead');
-  }
+    if (extensionContextOk()) { chrome.runtime.reload(); return; }
+  } catch (e) { /* fall through to the manual route */ }
+  try { chrome.tabs.create({ url: extensionsUrl() }); } catch (e) { /* nothing else to try */ }
+  toast('On the extensions page, click ↻ on LeadScout', 4000);
+}
+
+async function enableResolve() {
+  const box = $('optResolve');
+  if (box) box.checked = true;
+  settings.resolveProfiles = true;
+  await sendMsgRetry({ type: 'setSettings', settings: settings });
+  toast('Profile lookup is on — Refresh all looks up the missing profiles');
+}
+
+function openTroubleshootPanel() {
+  openTroubleshoot({
+    gather: gatherFacts,
+    fixes: {
+      'reload-page': () => location.reload(),
+      'reload-extension': reloadExtension,
+      'reset-filters': resetFilters,
+      'resume': doResume,
+      'retry-failed': doRetryFailed,
+      'refresh-all': doRefreshAll,
+      'start-research': () => { closeTroubleshoot(); $('companyInput').focus(); },
+      'enable-resolve': enableResolve
+    }
+  });
 }
 
 // ------------------------------------------------------------- settings ----
@@ -994,10 +1065,10 @@ function wire() {
     renderResults(true);
   });
 
+  on('btnTroubleshootTop', openTroubleshootPanel);
+  on('btnTroubleshoot', openTroubleshootPanel);
   on('btnCopyCsv', doCopy);
-  on('btnCopyTsv', doCopyTsv);
   on('btnDlCsv', doDownload);
-  on('btnDlFull', doDownloadFull);
   on('btnOpenFull', () => chrome.tabs.create({ url: 'results.html' }));
   on('btnClearResults', doClearResults);
 
