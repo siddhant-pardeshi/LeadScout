@@ -790,6 +790,21 @@ T('CSV format: RFC 4180 round-trip, no column shift', () => {
   assert.equal(rows[2][3], '', 'blank email stays blank');
 });
 
+T('fillMissing: "Not Found" only when the toggle is on', () => {
+  const comps = [{ name: 'Acme', website: 'https://acme.com', country: 'India',
+    people: [{ name: 'Asha Shah', designation: 'CTO', currentEmployer: 'current' }] }];
+  const plain = buildCSV(comps).split('\r\n')[1].split(',');
+  assert.equal(plain[3], '', 'email stays blank by default');
+  assert.equal(plain[9], '', 'LinkedIn stays blank by default');
+  const filled = buildCSV(comps, { fillMissing: true }).split('\r\n')[1].split(',');
+  assert.equal(filled[3], 'Not Found');
+  assert.equal(filled[5], 'Not Found');
+  assert.equal(filled[9], 'Not Found');
+  assert.equal(filled[2], 'CTO', 'a real value is never replaced');
+  assert.equal(filled[6], 'India');
+  assert.equal(filled[8], 'acme.com');
+});
+
 T('exportRowCount: past-role rows are not counted, so an empty export is refused', () => {
   const comps = [{ name: 'Acme', people: [
     { name: 'Asha Shah', designation: 'CTO', currentEmployer: 'current' },

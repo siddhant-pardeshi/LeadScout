@@ -12,6 +12,7 @@ import { openTroubleshoot, closeTroubleshoot } from './lib/troubleshoot.js';
 import { installGuard, on, onInput, missingBindings } from './lib/ui-guard.js';
 installGuard('results');
 const $ = (id) => document.getElementById(id);
+let pageSettings = { fillMissing: false };
 
 let job = null;
 const ui = { filter: 'all', search: '', pollTimer: null };
@@ -426,7 +427,7 @@ async function doCopy() {
   const comps = selectionForExport();
   if (!comps) return;
   try {
-    await navigator.clipboard.writeText(buildCSV(comps));
+    await navigator.clipboard.writeText(buildCSV(comps, { fillMissing: pageSettings.fillMissing === true }));
     flashButton('btnCopyCsv');
     toast('Copied the 10-column CSV');
   } catch (e) {
@@ -439,7 +440,7 @@ function doDownload() {
   if (!comps) return;
   // BOM first so Excel reads the UTF-8 names correctly
   download('leadscout-' + stamp() + '.csv',
-    '\uFEFF' + buildCSV(comps),
+    '\uFEFF' + buildCSV(comps, { fillMissing: pageSettings.fillMissing === true }),
     'text/csv;charset=utf-8');
   flashButton('btnDlCsv');
   toast('CSV saved — exactly 10 columns, opens straight in Excel');
@@ -453,6 +454,7 @@ async function gatherFacts() {
   try { version = chrome.runtime.getManifest().version; } catch (e) { /* context gone */ }
   const ping = await sendMsg({ type: 'ping' }).catch(() => ({ ok: false, error: 'no response' }));
   const st = await chrome.storage.local.get(['settings', 'job']);
+  pageSettings = { ...(st.settings || {}) };
   const saved = (st && st.settings) || {};
   const provider = saved.provider || DEFAULT_SETTINGS.provider;
   const keys = saved.keys || {};

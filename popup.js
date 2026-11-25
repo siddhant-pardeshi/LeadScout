@@ -508,6 +508,7 @@ async function doStart() {
   settings.deepScan = $('optDeepScan').checked;
   settings.includeEmails = $('optEmails').checked;
   settings.resolveProfiles = $('optResolve').checked;
+  settings.fillMissing = $('optFillMissing').checked;
   await sendMsgRetry({ type: 'setSettings', settings: settings });
 
   const res = await sendMsgRetry({ type: 'start', items: items });
@@ -673,7 +674,7 @@ async function doCopy() {
   const comps = selectionForExport();
   if (!comps) return;
   try {
-    await navigator.clipboard.writeText(buildCSV(comps));
+    await navigator.clipboard.writeText(buildCSV(comps, { fillMissing: settings.fillMissing === true }));
     flashButton('btnCopyCsv');
     toast('Copied the 10-column CSV');
   } catch (e) {
@@ -686,7 +687,7 @@ function doDownload() {
   if (!comps) return;
   // BOM first so Excel reads the UTF-8 names correctly
   download('leadscout-' + stamp() + '.csv',
-    '\uFEFF' + buildCSV(comps),
+    '\uFEFF' + buildCSV(comps, { fillMissing: settings.fillMissing === true }),
     'text/csv;charset=utf-8');
   flashButton('btnDlCsv');
   toast('CSV saved — exactly 10 columns, opens straight in Excel');
@@ -878,7 +879,8 @@ function collectFormSettings() {
     customModel: $('setCustomModel').value.trim(),
     bingDelayMs: Number($('setDelay').value) || 2200,
     searchHost: $('setHost').value,
-    theme: $('setTheme').value
+    theme: $('setTheme').value,
+    fillMissing: $('optFillMissing').checked
   };
 }
 
@@ -1151,6 +1153,7 @@ async function init() {
   $('optDeepScan').checked = settings.deepScan !== false;
   $('optEmails').checked = settings.includeEmails !== false;
   $('optResolve').checked = settings.resolveProfiles !== false;
+  $('optFillMissing').checked = settings.fillMissing === true;
   updateInputCount();
   renderProgress();
   renderResults(true);

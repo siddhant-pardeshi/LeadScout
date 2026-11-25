@@ -143,6 +143,7 @@ Settings → **API keys** saves each key into this browser only, with an optiona
 
 | Version | What changed |
 |---|---|
+| **2.5.2** | Optional **Fill empty cells with "Not Found"** (Settings, off by default) so a downloaded CSV shows every column populated; real values are never replaced and the default stays blank for clean CRM imports. Contact pages are now crawled for the registered address, and "Address:"/"Regd. office" phrases count as HQ evidence — that is where COUNTRY comes from. |
 | **2.5.1** | A company with no accepted person is now a **notice row** across the full width ("NO PROSPECT — JioMart — reason"), instead of that reason being painted into DESIGNATION, where it read like a person with a 12-line job title and put text in a column the CSV keeps empty. Leadership discovery also tries eight more about/board paths. |
 | **2.5.0** | The export is the ten-column CSV and nothing else: the 19-column "Full CSV" and every "Copy TSV" button are gone from the popup, the results page and the workspace. The workspace table is ten columns wide again (a row is deleted from inside its last cell). Column names are never shortened or clipped, the LinkedIn cell shows the address itself, and the table lists exactly the people the CSV writes. Row order now really follows priority (the comparison silently fell back to score before). New **🩺 Troubleshoot** panel explains an empty column, a dead button or a missing download and offers the fix. A real-browser test (`tools/e2e.ps1`) presses the actual buttons and reads the file. |
 | **2.4.2** | An export that would contain zero rows is refused with the counts that explain it ("1 companies, 1 people, 0 exportable rows — past-role or under review") instead of silently saving a header-only file. The results page gains **ⓘ Diagnostics**: one JSON with version, queue state and, per company, people vs exportable rows. |
@@ -158,7 +159,7 @@ Settings → **API keys** saves each key into this browser only, with an optiona
 ## Development
 
 ```bash
-node tools/test.mjs              # 116 checks: parsing, ranking, the CSV contract, the troubleshoot logic
+node tools/test.mjs              # 117 checks: parsing, ranking, the CSV contract, the troubleshoot logic
 node tools/diag_linkcheck.mjs    # standalone module-link check
 powershell -ExecutionPolicy Bypass -File tools\e2e.ps1   # real-browser test
 ```
