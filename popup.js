@@ -719,7 +719,7 @@ async function gatherFacts() {
     comps: filteredExportComps(),
     allResults: (job && job.results) || [],
     settings: {
-      resolveProfiles: settings.resolveProfiles !== false,
+      resolveProfiles: settings.resolveProfiles === true,
       maxResolvePerCompany: settings.maxResolvePerCompany,
       provider: provider,
       hasKey: hasKey,
@@ -1152,7 +1152,7 @@ async function init() {
   $('optProvider').value = settings.provider || 'groq';
   $('optDeepScan').checked = settings.deepScan !== false;
   $('optEmails').checked = settings.includeEmails !== false;
-  $('optResolve').checked = settings.resolveProfiles !== false;
+  $('optResolve').checked = settings.resolveProfiles === true;
   $('optFillMissing').checked = settings.fillMissing === true;
   updateInputCount();
   renderProgress();

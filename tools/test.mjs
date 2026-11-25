@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
-  parseInputs, slugFromUrl, titleCaseSlug, decodeBingUrl, parseProfileTitle,
+  DEFAULT_SETTINGS, parseInputs, slugFromUrl, titleCaseSlug, decodeBingUrl, parseProfileTitle,
   linkedinHandle, companyMatch, companyMatchPartial, domainFromWebsite, emailFor,
   buildCSV, exportRowCount, splitProspectName, CRM_EXPORT_HEADERS, sortPeople, extractSizeFromText, overlapTokens, kebabName, slugScore,
   looseResolveMatch, roleCurrency, matchHunterEmail, cell, exportCell, nameEvidence,
@@ -788,6 +788,11 @@ T('CSV format: RFC 4180 round-trip, no column shift', () => {
   assert.equal(rows[1][9], 'https://www.linkedin.com/in/aasif-malbari/', 'canonical profile, tracking removed');
   assert.equal(rows[2][0], 'José');
   assert.equal(rows[2][3], '', 'blank email stays blank');
+});
+
+T('profile lookup is opt-in so a run never spends Bing quota by default', () => {
+  assert.equal(DEFAULT_SETTINGS.resolveProfiles, false);
+  assert.equal(DEFAULT_SETTINGS.maxResolvePerCompany, 6, 'still bounded when enabled');
 });
 
 T('fillMissing: "Not Found" only when the toggle is on', () => {

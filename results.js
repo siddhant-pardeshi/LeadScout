@@ -475,7 +475,7 @@ async function gatherFacts() {
     comps: filteredExportComps(),
     allResults: (job && job.results) || [],
     settings: {
-      resolveProfiles: saved.resolveProfiles !== false,
+      resolveProfiles: saved.resolveProfiles === true,
       maxResolvePerCompany: saved.maxResolvePerCompany,
       provider: provider,
       hasKey: hasKey,
