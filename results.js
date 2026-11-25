@@ -1,7 +1,7 @@
 // LeadScout — full-page results view
 
-import { DEFAULT_SETTINGS, buildCSV, fmtEta, splitProspectName,
-  linkedinUrlForExport, websiteNameForExport } from './lib/parse.js';
+import { DEFAULT_SETTINGS, buildCSV, buildTSV, fmtEta, splitProspectName,
+  linkedinUrlForExport, websiteNameForExport, FULL_EXPORT_HEADERS } from './lib/parse.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -347,6 +347,30 @@ function doDownload() {
   toast('CSV saved — opens straight in Excel');
 }
 
+function doDownloadFull() {
+  const comps = filteredExportComps();
+  if (!comps.length) { toast('No results yet'); return; }
+  if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
+  download('leadscout-full-' + stamp() + '.csv',
+    '\uFEFF' + buildCSV(comps, { full: true }),
+    'text/csv;charset=utf-8');
+  flashButton('btnDlFull');
+  toast('Full CSV saved — ' + FULL_EXPORT_HEADERS.length + ' columns');
+}
+
+async function doCopyTsv() {
+  const comps = filteredExportComps();
+  if (!comps.length) { toast('No results yet'); return; }
+  if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
+  try {
+    await navigator.clipboard.writeText(buildTSV(comps));
+    flashButton('btnCopyTsv');
+    toast('Copied TSV — paste into Excel and it splits into columns');
+  } catch (e) {
+    toast('Clipboard blocked — use the CSV download instead');
+  }
+}
+
 function flashButton(id) {
   const b = $(id);
   if (!b) return;
@@ -371,7 +395,9 @@ function wire() {
     render(true);
   });
   $('btnCopyCsv').addEventListener('click', doCopy);
+  $('btnCopyTsv').addEventListener('click', doCopyTsv);
   $('btnDlCsv').addEventListener('click', doDownload);
+  $('btnDlFull').addEventListener('click', doDownloadFull);
 }
 
 async function init() {

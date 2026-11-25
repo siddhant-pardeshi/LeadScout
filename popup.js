@@ -1,7 +1,7 @@
 // LeadScout — popup controller (part 1: helpers, state, progress)
 
-import { DEFAULT_SETTINGS, parseInputs, buildCSV, fmtEta,
-  splitProspectName, linkedinUrlForExport, websiteNameForExport } from './lib/parse.js';
+import { DEFAULT_SETTINGS, parseInputs, buildCSV, buildTSV, fmtEta,
+  splitProspectName, linkedinUrlForExport, websiteNameForExport, FULL_EXPORT_HEADERS } from './lib/parse.js';
 import { KEY_PROVIDERS, KEY_LABELS, normalizeKeyMeta, keyStatus, fmtDate, localDateStr, isDateStr } from './lib/keys.js';
 import { extensionContextOk, extensionsUrl } from './lib/platform.js';
 import { extractLinkedInCompany } from './lib/extract.js';
@@ -636,6 +636,32 @@ function doDownload() {
   toast('CSV saved — opens straight in Excel');
 }
 
+/** Every field the pipeline holds, for people who want the evidence too. */
+function doDownloadFull() {
+  const comps = filteredExportComps();
+  if (!comps.length) { toast('No results yet'); return; }
+  if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
+  download('leadscout-full-' + stamp() + '.csv',
+    '\uFEFF' + buildCSV(comps, { full: true }),
+    'text/csv;charset=utf-8');
+  flashButton('btnDlFull');
+  toast('Full CSV saved — ' + FULL_EXPORT_HEADERS.length + ' columns');
+}
+
+/** Tabs, so a paste into Excel or Sheets lands in columns. */
+async function doCopyTsv() {
+  const comps = filteredExportComps();
+  if (!comps.length) { toast('No results yet'); return; }
+  if (!hasAcceptedProspects(comps)) { toast('No accepted prospects in the current view'); return; }
+  try {
+    await navigator.clipboard.writeText(buildTSV(comps));
+    flashButton('btnCopyTsv');
+    toast('Copied TSV — paste into Excel and it splits into columns');
+  } catch (e) {
+    toast('Clipboard blocked — use the CSV download instead');
+  }
+}
+
 // ------------------------------------------------------------- settings ----
 
 function shortExpiry(st) {
@@ -939,7 +965,9 @@ function wire() {
   });
 
   $('btnCopyCsv').addEventListener('click', doCopy);
+  $('btnCopyTsv').addEventListener('click', doCopyTsv);
   $('btnDlCsv').addEventListener('click', doDownload);
+  $('btnDlFull').addEventListener('click', doDownloadFull);
   $('btnOpenFull').addEventListener('click', () => chrome.tabs.create({ url: 'results.html' }));
   $('btnClearResults').addEventListener('click', doClearResults);
 

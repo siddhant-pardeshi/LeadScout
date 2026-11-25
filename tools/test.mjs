@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {
   parseInputs, slugFromUrl, titleCaseSlug, decodeBingUrl, parseProfileTitle,
   linkedinHandle, companyMatch, companyMatchPartial, domainFromWebsite, emailFor,
-  buildCSV, splitProspectName, CRM_EXPORT_HEADERS, extractSizeFromText, overlapTokens, kebabName, slugScore,
+  buildCSV, buildTSV, splitProspectName, CRM_EXPORT_HEADERS, FULL_EXPORT_HEADERS, extractSizeFromText, overlapTokens, kebabName, slugScore,
   looseResolveMatch, roleCurrency, matchHunterEmail, cell, exportCell, nameEvidence,
   officialLeadershipCandidate, inferWebsiteFromSerp, officialPageCandidate, classifyOutcome,
   domainMatchesCompany, websiteCandidates, companyFactsFromPage, resolveTargets,
@@ -744,6 +744,85 @@ T('buildCSV: default is the exact 10-column CRM contract, and nothing else', () 
   assert.equal(bob[1], 'Lee');
   assert.equal(bob[3], '');
   assert.equal(bob[9], '');
+});
+
+T('CSV format: RFC 4180 round-trip, no column shift', () => {
+  // Minimal RFC 4180 reader — the point is to prove Excel would parse the same
+  // fields we intended, including commas, quotes and Unicode inside a value.
+  const parse = (text) => {
+    const rows = []; let row = []; let cell = ''; let quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quoted) {
+        if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+        else if (ch === '"') quoted = false;
+        else cell += ch;
+      } else if (ch === '"') quoted = true;
+      else if (ch === ',') { row.push(cell); cell = ''; }
+      else if (ch === '\r') { /* ignore */ }
+      else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row); }
+    return rows;
+  };
+
+  const comps = [{
+    name: 'Godrej, Industries "Group"', website: 'https://www.godrejindustries.com',
+    size: '10,001+ employees', country: 'India', industry: 'Holding Companies',
+    hq: 'Mumbai, Maharashtra, India', url: 'https://www.linkedin.com/company/godrej-industries/',
+    people: [
+      { name: 'Aasif Malbari', designation: 'Managing Director & CEO, Godrej Consumer Products', email: 'aasif@x.com', emailStatus: 'estimated — unverified', url: 'https://in.linkedin.com/in/Aasif-Malbari/?trk=x', currentEmployer: 'current', priority: 'P1', verification: 'Verified LinkedIn profile', evidenceUrl: 'https://godrejindustries.com/leadership', sourceType: 'linkedin', linkedinSource: 'search' },
+      { name: 'José García', designation: 'Head of AI, Europe', email: '', currentEmployer: 'official', priority: 'P2', sourceType: 'official', evidenceUrl: 'https://x.com/team' }
+    ]
+  }];
+
+  const rows = parse(buildCSV(comps));
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows[0], CRM_EXPORT_HEADERS);
+  for (const r of rows.slice(1)) assert.equal(r.length, 10, 'every row has exactly ten cells');
+  assert.equal(rows[1][2], 'Managing Director & CEO, Godrej Consumer Products', 'comma stays inside DESIGNATION');
+  assert.equal(rows[1][4], 'Godrej, Industries "Group"', 'quotes survive');
+  assert.equal(rows[1][5], '10,001+ employees');
+  assert.equal(rows[1][9], 'https://www.linkedin.com/in/aasif-malbari/', 'canonical profile, tracking removed');
+  assert.equal(rows[2][0], 'José');
+  assert.equal(rows[2][3], '', 'blank email stays blank');
+});
+
+T('Full CSV carries every field in its own column', () => {
+  const comps = [{
+    name: 'Acme Corp', website: 'https://www.acme.com', size: '201-500', country: 'India',
+    industry: 'Software', hq: 'Pune, India', url: 'https://www.linkedin.com/company/acme/',
+    people: [{
+      name: 'Asha Shah', designation: 'CTO', email: 'asha@acme.io', emailStatus: 'estimated — unverified',
+      url: 'https://www.linkedin.com/in/asha-shah/', urlVerified: false, currentEmployer: 'official',
+      priority: 'P1', verification: 'Official company source',
+      evidenceUrl: 'https://acme.com/team', sourceType: 'official'
+    }]
+  }];
+  const header = buildCSV(comps, { full: true }).split('\r\n')[0];
+  assert.equal(header, FULL_EXPORT_HEADERS.join(','));
+  assert.equal(FULL_EXPORT_HEADERS.length, 19);
+  const row = buildCSV(comps, { full: true }).split('\r\n')[1];
+  assert.ok(row.startsWith('Asha,Shah,CTO,asha@acme.io,Acme Corp,201-500,India,Software,acme.com,https://www.linkedin.com/in/asha-shah/,'));
+  assert.ok(row.includes('"Pune, India"'), 'HQ with a comma stays one quoted cell');
+  assert.ok(row.includes('https://www.linkedin.com/company/acme/'));
+  assert.ok(row.includes('Current (official company source)'));
+  assert.ok(row.endsWith(',Official company source'), 'source is the last column');
+});
+
+T('TSV is the same table with tabs, for pasting into Excel', () => {
+  const comps = [{
+    name: 'Acme, Inc', people: [{
+      name: 'Asha Shah', designation: 'Head\tof Sales', currentEmployer: 'current'
+    }]
+  }];
+  const lines = buildTSV(comps).replace(/\r\n$/, '').split('\r\n');
+  assert.equal(lines[0], CRM_EXPORT_HEADERS.join('\t'));
+  const cells = lines[1].split('\t');
+  assert.equal(cells.length, 10);
+  assert.equal(cells[2], 'Head of Sales', 'an embedded tab cannot add a column');
+  assert.equal(cells[4], 'Acme, Inc', 'commas are safe in TSV');
 });
 
 T('buildCSV: no manufactured row for a review-only company', () => {
