@@ -7,7 +7,7 @@ import {
   buildCSV, exportRowCount, splitProspectName, CRM_EXPORT_HEADERS, sortPeople, extractSizeFromText, overlapTokens, kebabName, slugScore,
   looseResolveMatch, roleCurrency, matchHunterEmail, cell, exportCell, nameEvidence,
   officialLeadershipCandidate, inferWebsiteFromSerp, officialPageCandidate, classifyOutcome,
-  domainMatchesCompany, websiteCandidates, companyFactsFromPage, resolveTargets,
+  domainMatchesCompany, websiteCandidates, companyFactsFromPage, resolveTargets, countryFromSerp,
   linkedinUrlForExport
 } from '../lib/parse.js';
 import {
@@ -788,6 +788,23 @@ T('CSV format: RFC 4180 round-trip, no column shift', () => {
   assert.equal(rows[1][9], 'https://www.linkedin.com/in/aasif-malbari/', 'canonical profile, tracking removed');
   assert.equal(rows[2][0], 'José');
   assert.equal(rows[2][3], '', 'blank email stays blank');
+});
+
+T('countryFromSerp: needs the same country twice, in results that name the company', () => {
+  const two = [
+    { title: 'Welspun World | Mumbai', snippet: 'Welspun World, Mumbai, India. Textiles.' },
+    { title: 'Welspun — About', snippet: 'Headquartered in Mumbai, India' }
+  ];
+  assert.equal(countryFromSerp(two, 'Welspun World'), 'India');
+  assert.equal(countryFromSerp([{ title: 'Acme', snippet: 'India' }], 'Acme'), '', 'one mention is not enough');
+  assert.equal(countryFromSerp([
+    { title: 'Acme', snippet: 'expands to the US' },
+    { title: 'Acme', snippet: 'opens an office in India' }
+  ], 'Acme'), '', 'a split vote stays blank');
+  assert.equal(countryFromSerp([
+    { title: 'Other Co', snippet: 'India, India' },
+    { title: 'Other Co', snippet: 'India' }
+  ], 'Acme'), '', 'ignores results that do not name the company');
 });
 
 T('profile lookup is opt-in so a run never spends Bing quota by default', () => {

@@ -19,7 +19,7 @@ import {
   extractSizeFromText, overlapTokens, kebabName, slugScore, looseResolveMatch,
   roleCurrency, matchHunterEmail, cell, nameEvidence, officialLeadershipCandidate, resolveTargets,
   inferWebsiteFromSerp, officialPageCandidate, classifyOutcome, domainMatchesCompany, websiteCandidates,
-  companyFactsFromPage
+  companyFactsFromPage, countryFromSerp
 } from './lib/parse.js';
 import { classifyDesignation, seniorityBonus } from './lib/rank.js';
 import { aiResearch, aiTestKey } from './lib/ai.js';
@@ -1049,6 +1049,15 @@ async function researchCompany(item, idx) {
   }
   const domain = domainFromWebsite(comp.website);
   if (!comp.country && comp.hq) comp.country = countryFromHq(comp.hq);
+  // Last honest source: the company's own search snippets. The same country must
+  // appear twice, so a passing "expands to the US" cannot relabel a company.
+  if (!comp.country) {
+    const fromSerp = countryFromSerp(serp, companyName());
+    if (fromSerp) {
+      comp.country = fromSerp;
+      if (comp.factSource === 'none') comp.factSource = 'search';
+    }
+  }
   // v1.3 emails: optional Hunter.io (free key) gives real addresses / verified
   // domain patterns; without it, pattern estimates are used and flagged.
   let hunterData = null;

@@ -143,6 +143,7 @@ Settings → **API keys** saves each key into this browser only, with an optiona
 
 | Version | What changed |
 |---|---|
+| **2.5.4** | `COUNTRY` fills from the company's own search snippets when no page states an address — the same country must appear in at least two results that name the company, so a passing "expands to the US" cannot relabel it. Welspun now exports `India · Textiles · 50,000+ employees · welspun.com` with only `LINKEDIN_URL` blank. |
 | **2.5.3** | **Regression fix.** Per-person profile lookup now defaults to **off**, like the earlier builds. It used to run up to six extra Bing searches inside every company, which consumed the queue's search budget, triggered Bing's consent wall and left runs with no rows. Research is back to: rows with every fact it can source, and a blank LINKEDIN_URL when nothing was found. Turn lookup on in Settings when you want it. |
 | **2.5.2** | Optional **Fill empty cells with "Not Found"** (Settings, off by default) so a downloaded CSV shows every column populated; real values are never replaced and the default stays blank for clean CRM imports. Contact pages are now crawled for the registered address, and "Address:"/"Regd. office" phrases count as HQ evidence — that is where COUNTRY comes from. |
 | **2.5.1** | A company with no accepted person is now a **notice row** across the full width ("NO PROSPECT — JioMart — reason"), instead of that reason being painted into DESIGNATION, where it read like a person with a 12-line job title and put text in a column the CSV keeps empty. Leadership discovery also tries eight more about/board paths. |
@@ -160,7 +161,7 @@ Settings → **API keys** saves each key into this browser only, with an optiona
 ## Development
 
 ```bash
-node tools/test.mjs              # 118 checks: parsing, ranking, the CSV contract, the troubleshoot logic
+node tools/test.mjs              # 119 checks: parsing, ranking, the CSV contract, the troubleshoot logic
 node tools/diag_linkcheck.mjs    # standalone module-link check
 powershell -ExecutionPolicy Bypass -File tools\e2e.ps1   # real-browser test
 ```
