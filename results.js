@@ -264,42 +264,7 @@ function render(force) {
   for (const r of capped) {
     const tr = document.createElement('tr');
 
-    if (r.kind === 'review') {
-      // A company with no accepted person is a NOTICE, not a prospect. Painting
-      // the reason into DESIGNATION made an empty company look like a person
-      // with a 12-line job title, and put text in a column the CSV keeps empty.
-      const review = reviewDisplay(r.comp, r.pastOnly);
-      const td = document.createElement('td');
-      td.colSpan = 10;
-      td.className = 'notice-cell';
-      td.title = review.title || '';
-
-      const chip = document.createElement('span');
-      chip.className = 'notice-chip';
-      chip.textContent = 'NO PROSPECT';
-
-      const company = document.createElement('span');
-      company.className = 'notice-company';
-      company.textContent = r.comp.name || 'Company';
-
-      const text = document.createElement('span');
-      text.className = 'notice-main';
-      text.textContent = review.text;
-
-      const meta = document.createElement('span');
-      meta.className = 'notice-meta';
-      meta.textContent = [
-        r.comp.size, r.comp.country, r.comp.industry,
-        websiteNameForExport(r.comp.website)
-      ].filter(Boolean).join(' · ');
-
-      td.append(chip, company, text);
-      if (meta.textContent) td.appendChild(meta);
-      tr.className = 'notice-row';
-      tr.appendChild(td);
-      frag.appendChild(tr);
-      continue;
-    }
+    if (r.kind !== 'person') continue; // data only — no notice rows
 
     const p = r.p;
     const c = r.comp;

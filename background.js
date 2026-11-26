@@ -149,7 +149,7 @@ async function waitForTabLoad(tabId, timeoutMs) {
 async function bingSearch(query) {
   const host = SETTINGS.searchHost || 'www.bing.com';
   const url = 'https://' + host + '/search?q=' + encodeURIComponent(query) + '&count=30';
-  const tabId = await ensureTab('bing', url);
+  let tabId = await ensureTab('bing', url);
   await waitForTabLoad(tabId, 22000);
   const meta = {
     query: query, state: 'ok', attempts: 0, resultCount: 0,
@@ -157,6 +157,7 @@ async function bingSearch(query) {
   };
   let res = null;
   let extractionErrors = 0;
+  let lastError = '';
   for (let attempt = 0; attempt < 3; attempt++) {
     meta.attempts = attempt + 1;
     try {
@@ -164,7 +165,19 @@ async function bingSearch(query) {
       res = frames && frames[0] && frames[0].result;
     } catch (e) {
       extractionErrors++;
-      await sleep(1200);
+      lastError = String(e && e.message || e);
+      // A reused search tab can end up on about:blank (crashed, closed by the
+      // renderer, or replaced by a redirect). Recreate it once and carry on
+      // instead of failing every remaining company.
+      if (attempt === 1) {
+        try { await chrome.tabs.remove(tabId); } catch (e2) { /* already gone */ }
+        S.tabBing = null;
+        tabId = await ensureTab('bing', url);
+        await waitForTabLoad(tabId, 22000);
+        await sleep(700);
+      } else {
+        await sleep(1200);
+      }
       continue;
     }
     if (res && res.captcha) break;
@@ -176,7 +189,7 @@ async function bingSearch(query) {
     await sleep(1400); // late render — try once more
   }
   if (!res) {
-    const err = new Error('Bing result extraction failed after ' + extractionErrors + ' attempts');
+    const err = new Error('Bing result extraction failed after ' + extractionErrors + ' attempts' + (lastError ? ': ' + lastError : ''));
     err.code = 'bing-extractor-error';
     throw err;
   }
